@@ -12,3 +12,4 @@ __pycache__/
 
 # Local runtime artifacts
 *.log
+error.log
