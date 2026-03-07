@@ -40,7 +40,7 @@ def writechi(filen, x, y, preheader=None):
                fmt='%1.7e', header=header, comments=preheader)
 
 
-def readchi(filen):
+def readchi(filen, include_metadata=False):
     """
     read chi with BG ROI and BG PARAMS
     """
@@ -48,6 +48,27 @@ def readchi(filen):
         content = f.readlines()
     roi = re.findall(r"[-+]?\d*\.\d+|\d+", content[0]) if len(content) > 0 else []
     bg_params = re.findall(r"[-+]?\d*\.\d+|\d+", content[1]) if len(content) > 1 else []
+    metadata = {"bg_areas": []}
+
+    for line in content:
+        stripped = line.strip()
+        if not stripped.lower().startswith("# bg areas:"):
+            continue
+        raw = stripped.split(":", 1)[1].strip()
+        if not raw:
+            continue
+        for chunk in raw.split(";"):
+            parts = [p.strip() for p in chunk.split(",")]
+            if len(parts) != 2:
+                continue
+            try:
+                xmin = float(parts[0])
+                xmax = float(parts[1])
+            except ValueError:
+                continue
+            if xmax < xmin:
+                xmin, xmax = xmax, xmin
+            metadata["bg_areas"].append([xmin, xmax])
 
     data_rows = []
     for line in content:
@@ -69,6 +90,8 @@ def readchi(filen):
 
     data = np.asarray(data_rows, dtype=float)
     x, y = data.T
+    if include_metadata:
+        return [float(r) for r in roi], [int(b) for b in bg_params], x, y, metadata
     return [float(r) for r in roi], [int(b) for b in bg_params], x, y
 
 

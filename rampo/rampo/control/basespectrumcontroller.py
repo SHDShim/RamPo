@@ -138,6 +138,19 @@ class BaseSpectrumController(object):
             self.model.base_ptn.roi[0])
         self.widget.doubleSpinBox_Background_ROI_max.setValue(
             self.model.base_ptn.roi[1])
+        table = getattr(self.widget, "tableWidget_BackgroundConstraints", None)
+        if table is not None:
+            table.setRowCount(0)
+            for area in getattr(self.model.base_ptn, "bg_fit_areas", []) or []:
+                try:
+                    xmin = float(area[0])
+                    xmax = float(area[1])
+                except Exception:
+                    continue
+                row = table.rowCount()
+                table.insertRow(row)
+                table.setItem(row, 0, QtWidgets.QTableWidgetItem(f"{xmin:.3f}"))
+                table.setItem(row, 1, QtWidgets.QTableWidgetItem(f"{xmax:.3f}"))
 
     def _update_bgsub_from_current_values(self):
         fit_areas = []

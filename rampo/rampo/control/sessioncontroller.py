@@ -425,6 +425,24 @@ class SessionController(object):
                 pass
         self._apply_diff_ui_state((ui_state or {}).get("diff", {}))
 
+    def _restore_background_ui_from_model(self):
+        if not self.model.base_ptn_exist():
+            return
+        base_ptn = self.model.base_ptn
+        roi = getattr(base_ptn, "roi", None)
+        if roi is not None and len(roi) >= 2:
+            try:
+                self.widget.doubleSpinBox_Background_ROI_min.setValue(float(roi[0]))
+                self.widget.doubleSpinBox_Background_ROI_max.setValue(float(roi[1]))
+            except Exception:
+                pass
+        try:
+            params = getattr(base_ptn, "params_chbg", None) or [3]
+            self.widget.spinBox_BGParam1.setValue(int(params[0]))
+        except Exception:
+            pass
+        self._apply_background_areas(getattr(base_ptn, "bg_fit_areas", []) or [])
+
     def _apply_diff_ui_state(self, diff):
         if ((not hasattr(self.widget, "checkBox_Diff")) and
                 (not hasattr(self.widget, "checkBox_UseDiffMode"))) or (diff == {}):
@@ -482,6 +500,7 @@ class SessionController(object):
             self.widget.doubleSpinBox_Pressure.setValue(self.model.get_saved_pressure())
             self.widget.doubleSpinBox_Temperature.setValue(self.model.get_saved_temperature())
             self._apply_ui_state(ui_state or {})
+            self._restore_background_ui_from_model()
             self.update_inputs()
         self._sync_peakfit_selection_to_current_section()
         self.plot_ctrl.zoom_out_graph()
@@ -825,8 +844,8 @@ class SessionController(object):
         self.jcpdstable_ctrl.update(step=step)
         self.peakfit_table_ctrl.update_sections()
         self.peakfit_table_ctrl.update_peak_parameters()
-        self.peakfit_table_ctrl.update_baseline_constraints()
         self.peakfit_table_ctrl.update_peak_constraints()
+        self._restore_background_ui_from_model()
 
     # JSON-only Rampo session scheme. Legacy session formats are disabled.
     def migrate_dpp_for_chi_if_exists(self, chi_file):

@@ -166,6 +166,11 @@ class MainWindow(QtWidgets.QMainWindow, Ui_MainWindow):
         # Legacy toolbar save icon is replaced by the session Save button.
         if hasattr(self, "pushButton_S_SaveSession"):
             self.pushButton_S_SaveSession.setVisible(False)
+        for name in ("pushButton_S_PIncrease", "pushButton_S_PDecrease"):
+            if hasattr(self, name):
+                btn = getattr(self, name)
+                btn.setEnabled(False)
+                btn.setToolTip("Reserved for a future Rampo update.")
         for name in ("pushButton_S_TIncrease", "pushButton_S_RoomT", "pushButton_S_TDecrease"):
             if hasattr(self, name):
                 getattr(self, name).setVisible(False)
@@ -190,6 +195,10 @@ class MainWindow(QtWidgets.QMainWindow, Ui_MainWindow):
             self.pushButton_SaveBgSubCHI.setVisible(False)
         if hasattr(self, "pushButton_ApplyCakeView"):
             self.pushButton_ApplyCakeView.setVisible(False)
+        if hasattr(self, "pushButton_ApplyWaterfallChange"):
+            self.pushButton_ApplyWaterfallChange.setVisible(False)
+        if hasattr(self, "checkBox_SetToBasePtnLambda"):
+            self.checkBox_SetToBasePtnLambda.setVisible(False)
         for name in (
             "groupBox_19",
             "tableWidget_DiffImgAzi",
@@ -406,16 +415,16 @@ class MainWindow(QtWidgets.QMainWindow, Ui_MainWindow):
         self.tabWidget_PlotSub.addTab(self.tab_PlotConfig, "Config")
         self.verticalLayout_44.addWidget(self.tabWidget_PlotSub)
 
-        # Control tab: plot control + JCPDS bars + cake display controls
+        # Control tab: active CCD controls first, disabled future controls after.
         self.groupBox_34.setParent(self.plotControlContents)
         self.groupBox_20.setParent(self.plotControlContents)
         self.groupBox_29.setParent(self.plotControlContents)
         self.groupBox_5.setParent(self.plotControlContents)
         self.groupBox_23.setParent(self.plotControlContents)
-        self.verticalLayout_PlotControl.addWidget(self.groupBox_34)
-        self.verticalLayout_PlotControl.addWidget(self.groupBox_20)
         self.verticalLayout_PlotControl.addWidget(self.groupBox_29)
         self.verticalLayout_PlotControl.addWidget(self.groupBox_5)
+        self.verticalLayout_PlotControl.addWidget(self.groupBox_34)
+        self.verticalLayout_PlotControl.addWidget(self.groupBox_20)
         self.verticalLayout_PlotControl.addWidget(self.groupBox_23)
         self.verticalLayout_PlotControl.addStretch(1)
 
@@ -864,6 +873,9 @@ class MainWindow(QtWidgets.QMainWindow, Ui_MainWindow):
         self.doubleSpinBox_DiffVmax.setMaximum(1e9)
         self.doubleSpinBox_DiffVmax.setSingleStep(1.0)
         self.doubleSpinBox_DiffVmax.setValue(1000.0)
+        self.pushButton_DiffScaleToData = QtWidgets.QPushButton(
+            "Use diff min/max", self.groupBox_DiffCake)
+        self.pushButton_DiffScaleToData.setObjectName("pushButton_DiffScaleToData")
         self.gridLayout_DiffCake.addWidget(self.label_DiffScaleMode, 0, 0, 1, 1)
         self.gridLayout_DiffCake.addWidget(self.comboBox_DiffScaleMode, 0, 1, 1, 1)
         self.gridLayout_DiffCake.addWidget(self.label_DiffCmap, 0, 2, 1, 1)
@@ -872,6 +884,7 @@ class MainWindow(QtWidgets.QMainWindow, Ui_MainWindow):
         self.gridLayout_DiffCake.addWidget(self.doubleSpinBox_DiffVmin, 1, 1, 1, 1)
         self.gridLayout_DiffCake.addWidget(self.label_DiffVmax, 1, 2, 1, 1)
         self.gridLayout_DiffCake.addWidget(self.doubleSpinBox_DiffVmax, 1, 3, 1, 1)
+        self.gridLayout_DiffCake.addWidget(self.pushButton_DiffScaleToData, 2, 0, 1, 4)
 
         # Export outputs only on demand.
         self.groupBox_DiffExport = QtWidgets.QGroupBox("Export", self.diffContents)
@@ -1172,7 +1185,7 @@ class MainWindow(QtWidgets.QMainWindow, Ui_MainWindow):
         self.gridLayout_SeqLoad = QtWidgets.QGridLayout(self.groupBox_SeqLoad)
         self.gridLayout_SeqLoad.setHorizontalSpacing(12)
         self.gridLayout_SeqLoad.setVerticalSpacing(8)
-        self.pushButton_SeqLoadChi = QtWidgets.QPushButton("Load CHI files", self.groupBox_SeqLoad)
+        self.pushButton_SeqLoadChi = QtWidgets.QPushButton("Load SPE files", self.groupBox_SeqLoad)
         self.pushButton_SeqLoadChi.setObjectName("pushButton_SeqLoadChi")
         self.pushButton_SeqLoadChi.setMinimumSize(QtCore.QSize(140, 28))
         self.pushButton_SeqLoadChi.setMaximumWidth(180)
@@ -1217,7 +1230,7 @@ class MainWindow(QtWidgets.QMainWindow, Ui_MainWindow):
         self.verticalLayout_SeqCanvas.setObjectName("verticalLayout_SeqCanvas")
         self.groupBox_SeqCanvas.setMinimumHeight(320)
 
-        self.label_SeqStatus = QtWidgets.QLabel("Load CHI files to start.", self.seqContents)
+        self.label_SeqStatus = QtWidgets.QLabel("Load SPE files to start.", self.seqContents)
         self.label_SeqStatus.setObjectName("label_SeqStatus")
 
         self.groupBox_SeqExport = QtWidgets.QGroupBox("Export", self.seqContents)
@@ -1260,28 +1273,23 @@ class MainWindow(QtWidgets.QMainWindow, Ui_MainWindow):
                 self.tabWidget.insertTab(idx_fits, self.tab_Seq, "Seq")
 
     def _reorder_main_tabs_and_fit_tab_names(self):
-        if hasattr(self, "tabWidget_4"):
-            if hasattr(self, "tabWidget_4Page1"):
-                idx0 = self.tabWidget_4.indexOf(self.tabWidget_4Page1)
-                if idx0 >= 0:
-                    self.tabWidget_4.setTabText(idx0, "PeakFit")
-            if hasattr(self, "tabWidget_4Page2"):
-                idx1 = self.tabWidget_4.indexOf(self.tabWidget_4Page2)
-                if idx1 >= 0:
-                    self.tabWidget_4.setTabText(idx1, "CellFit")
+        if hasattr(self, "tabWidget") and hasattr(self, "tab_PkFt"):
+            idx_pk = self.tabWidget.indexOf(self.tab_PkFt)
+            if idx_pk >= 0:
+                self.tabWidget.setTabText(idx_pk, "PeakFit")
 
         if not hasattr(self, "tabWidget"):
             return
-        # Place Pattern between Plot and Cake, then keep Diff before Fits.
+        # Place Spectrum workflow tabs in the requested order.
         desired = []
         for name in (
             "tab_Main",      # File
             "tab_Plot",      # Plot
             "tab_Bkgn",      # Pattern
-            "tab_Diff",      # Diff
             "tab_Map",       # Map
+            "tab_Diff",      # Diff
             "tab_Seq",       # Seq
-            "tab_PkFt",      # Fits
+            "tab_PkFt",      # PeakFit
         ):
             if hasattr(self, name):
                 desired.append(getattr(self, name))
@@ -1558,13 +1566,23 @@ class MainWindow(QtWidgets.QMainWindow, Ui_MainWindow):
             self.groupBox_18.setTitle("RAPO list source")
         if hasattr(self, "groupBox_20"):
             self.groupBox_20.setTitle("RAPO bars")
+            self.groupBox_20.setEnabled(False)
+            self.groupBox_20.setToolTip("Reserved for a future Rampo update.")
+        if hasattr(self, "groupBox_34"):
+            self.groupBox_34.setEnabled(False)
+            self.groupBox_34.setToolTip("Reserved for a future Rampo update.")
         if hasattr(self, "groupBox_27"):
             self.groupBox_27.setTitle("RAPO Opacity")
+            self.groupBox_27.setEnabled(False)
+            self.groupBox_27.setToolTip("Reserved for a future Rampo update.")
+        if hasattr(self, "groupBox_13"):
+            self.groupBox_13.setEnabled(False)
+            self.groupBox_13.setToolTip("Reserved for a future Rampo update.")
         if hasattr(self, "textEdit_DiffractionImageFilename"):
             self.textEdit_DiffractionImageFilename.setToolTip(
                 "CCD image source. For SPE input the source file is the spectrum itself.")
         if hasattr(self, "pushButton_Info"):
-            self.pushButton_Info.setText("CCD Info")
+            self.pushButton_Info.setVisible(False)
         if hasattr(self, "pushButton_NewBasePtn"):
             self.pushButton_NewBasePtn.setText("Open SPE")
             self.pushButton_NewBasePtn.setToolTip("Open SPE or CHI spectrum file")
@@ -1623,6 +1641,18 @@ class MainWindow(QtWidgets.QMainWindow, Ui_MainWindow):
             idx = self.tabWidget_4.indexOf(self.tabWidget_4Page2)
             if idx >= 0:
                 self.tabWidget_4.removeTab(idx)
+        if hasattr(self, "tabWidget_4") and hasattr(self, "tabWidget_PeakFit") and hasattr(self, "verticalLayout_14"):
+            self.tabWidget_PeakFit.setParent(self.tab_PkFt)
+            self.verticalLayout_14.addWidget(self.tabWidget_PeakFit)
+            self.tabWidget_4.setVisible(False)
+        for name in (
+            "pushButton_AddRemoveFromJlist",
+            "spinBox_PeaksFromJlistIntensity",
+            "label_16",
+            "pushButton_PlotSelectedPkFtResults",
+        ):
+            if hasattr(self, name):
+                getattr(self, name).setVisible(False)
 
     def _disable_ccd_tab(self):
         if hasattr(self, "tabWidget") and hasattr(self, "tab_Cake1"):

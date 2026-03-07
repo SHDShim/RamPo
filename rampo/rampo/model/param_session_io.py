@@ -177,6 +177,9 @@ def _serialize_pattern(
         "wavelength": getattr(pattern, "wavelength", None),
         "color": getattr(pattern, "color", None),
         "display": getattr(pattern, "display", None),
+        "bg_roi": list(getattr(pattern, "roi", []) or []),
+        "bg_params": list(getattr(pattern, "params_chbg", []) or []),
+        "bg_fit_areas": list(getattr(pattern, "bg_fit_areas", []) or []),
         "bgsub_file": bgsub_name,
         "bg_file": bg_name,
     }
@@ -220,8 +223,27 @@ def _load_pattern(payload, chi_root, temp_dir):
     ptn._pkpo_fallback_relpath = fallback_stored
     ptn._pkpo_fallback_in_use = used_fallback
     # Keep background-subtracted state in legacy chi files.
+    payload_fit_areas = payload.get("bg_fit_areas", []) or []
+    payload_bg_params = payload.get("bg_params", []) or []
+    payload_bg_roi = payload.get("bg_roi", []) or []
     if ptn.fname is not None:
         ptn.read_bg_from_tempfile(temp_dir=temp_dir)
+    if payload_fit_areas:
+        ptn.bg_fit_areas = [
+            [float(area[0]), float(area[1])]
+            for area in payload_fit_areas
+            if isinstance(area, (list, tuple)) and len(area) >= 2
+        ]
+    if payload_bg_params:
+        try:
+            ptn.params_chbg = [int(payload_bg_params[0])]
+        except Exception:
+            pass
+    if payload_bg_roi and len(payload_bg_roi) >= 2:
+        try:
+            ptn.roi = [float(payload_bg_roi[0]), float(payload_bg_roi[1])]
+        except Exception:
+            pass
     return ptn
 
 

@@ -6,6 +6,7 @@ from qtpy import QtGui
 from .mplcontroller import MplController
 from .waterfalltablecontroller import WaterfallTableController
 from ..utils import get_directory, get_temp_dir
+from ..ds_ramspec import PatternPeakPo, Spectrum
 
 
 class WaterfallController(object):
@@ -39,8 +40,6 @@ class WaterfallController(object):
             self.move_up_waterfall)
         self.widget.pushButton_DownPattern.clicked.connect(
             self.move_down_waterfall)
-        self.widget.pushButton_ApplyWaterfallChange.clicked.connect(
-            self._apply_changes_to_graph)
         self.widget.checkBox_IntNorm.clicked.connect(
             self._apply_changes_to_graph)
         self.widget.checkBox_ShowWaterfall.clicked.connect(
@@ -114,6 +113,7 @@ class WaterfallController(object):
         this does not do actual nomalization but the processing.
         actual normalization takes place in plotting.
         """
+        self._reprocess_waterfall_patterns()
         if reinforced:
             pass
         else:
@@ -126,6 +126,39 @@ class WaterfallController(object):
             if count == 0:
                 return
         self.plot_ctrl.update()
+
+    def _current_background_fit_areas(self):
+        fit_areas = []
+        table = getattr(self.widget, "tableWidget_BackgroundConstraints", None)
+        if table is None:
+            return fit_areas
+        for row in range(table.rowCount()):
+            item_min = table.item(row, 0)
+            item_max = table.item(row, 1)
+            if item_min is None or item_max is None:
+                continue
+            try:
+                xmin = float(item_min.text())
+                xmax = float(item_max.text())
+            except Exception:
+                continue
+            if xmax < xmin:
+                xmin, xmax = xmax, xmin
+            fit_areas.append([xmin, xmax])
+        return fit_areas
+
+    def _reprocess_waterfall_patterns(self):
+        if not self.model.waterfall_exist():
+            return
+        for idx, pattern in enumerate(list(self.model.waterfall_ptn)):
+            try:
+                self.model.waterfall_ptn[idx] = self._build_processed_waterfall_pattern(
+                    getattr(pattern, "_pkpo_original_fname", None) or getattr(pattern, "fname", None),
+                    display=bool(getattr(pattern, "display", False)),
+                    color=getattr(pattern, "color", "white"),
+                )
+            except Exception:
+                continue
 
     def _find_a_waterfall_ptn(self):
         idx_checked = [
@@ -155,13 +188,7 @@ class WaterfallController(object):
         if files is not None:
             for f in files:
                 filename = str(f)
-                wavelength = self.widget.doubleSpinBox_SetWavelength.value()
-                bg_roi = [self.widget.doubleSpinBox_Background_ROI_min.value(),
-                          self.widget.doubleSpinBox_Background_ROI_max.value()]
-                bg_params = [self.widget.spinBox_BGParam1.value()]
-                temp_dir = get_temp_dir(self.model.get_base_ptn_filename())
-                self.model.append_a_waterfall_ptn(
-                    filename, wavelength, bg_roi, bg_params, temp_dir=temp_dir)
+                self._append_processed_waterfall_pattern(filename, display=False)
             self.waterfall_table_ctrl.update()
             self._apply_changes_to_graph()
         return
@@ -176,15 +203,66 @@ class WaterfallController(object):
         if self.model.exist_in_waterfall(filename):
             self.widget.pushButton_AddBasePtn.setChecked(True)
             return
-        wavelength = self.widget.doubleSpinBox_SetWavelength.value()
-        bg_roi = [self.widget.doubleSpinBox_Background_ROI_min.value(),
-                  self.widget.doubleSpinBox_Background_ROI_max.value()]
-        bg_params = [self.widget.spinBox_BGParam1.value()]
-        temp_dir = get_temp_dir(self.model.get_base_ptn_filename())
-        self.model.append_a_waterfall_ptn(
-            filename, wavelength, bg_roi, bg_params, temp_dir=temp_dir)
+        self._append_processed_waterfall_pattern(filename, display=False)
         self.waterfall_table_ctrl.update()
         self._apply_changes_to_graph()
+
+    def _append_processed_waterfall_pattern(self, filename, display=False):
+        pattern = self._build_processed_waterfall_pattern(
+            filename, display=display, color='white')
+        self.model.waterfall_ptn.append(pattern)
+
+    def _build_processed_waterfall_pattern(self, filename, display=False, color='white'):
+        wavelength = float(self.widget.doubleSpinBox_SetWavelength.value())
+        bg_roi = [
+            float(self.widget.doubleSpinBox_Background_ROI_min.value()),
+            float(self.widget.doubleSpinBox_Background_ROI_max.value()),
+        ]
+        bg_params = [int(self.widget.spinBox_BGParam1.value())]
+        fit_areas = self._current_background_fit_areas()
+
+        spectrum = Spectrum(filename)
+        if str(filename).lower().endswith(".spe"):
+            spectrum.apply_excitation_wavelength(wavelength)
+            if hasattr(self.widget, "spinBox_CCDRowMin") and hasattr(self.widget, "spinBox_CCDRowMax"):
+                spectrum.set_spe_row_roi(
+                    int(self.widget.spinBox_CCDRowMin.value()),
+                    int(self.widget.spinBox_CCDRowMax.value()))
+
+        x_raw, y_raw = spectrum.get_raw()
+        x_raw = spectrum.x_raw
+        y_fit = y_raw
+        if self.plot_ctrl is not None and bool(self.plot_ctrl._smoothing_active()):
+            __, y_fit = self.plot_ctrl._get_smoothed_pattern_xy(x_raw, y_raw)
+        spectrum.get_chbg(
+            bg_roi,
+            params=bg_params,
+            yshift=0,
+            fit_areas=fit_areas,
+            y_source=y_fit,
+        )
+
+        pattern = PatternPeakPo()
+        pattern.fname = filename
+        pattern._pkpo_original_fname = filename
+        pattern.wavelength = wavelength
+        pattern.display = bool(display)
+        pattern.color = str(color)
+        pattern.x_raw = spectrum.x_raw
+        pattern.y_raw = spectrum.y_raw
+        pattern.raw_image = getattr(spectrum, "raw_image", None)
+        pattern.x_wavelength_raw = getattr(spectrum, "x_wavelength_raw", None)
+        pattern.row_roi = getattr(spectrum, "row_roi", None)
+        pattern.set_bg(
+            spectrum.x_bg,
+            spectrum.y_bg,
+            spectrum.x_bgsub,
+            spectrum.y_bgsub,
+            spectrum.roi,
+            spectrum.params_chbg,
+            fit_areas=getattr(spectrum, "bg_fit_areas", []),
+        )
+        return pattern
 
     def move_up_waterfall(self):
         # get selected cell number

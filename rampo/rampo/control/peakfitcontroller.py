@@ -30,21 +30,14 @@ class PeakFitController(object):
             self.remove_section)
         self.widget.pushButton_PkFtSectionSetToCurrent.clicked.\
             connect(self.set_section_to_current)
-        self.widget.pushButton_AddRemoveFromJlist.clicked.connect(
-            self.get_peaks_from_jcpds)
         self.widget.pushButton_ZoomToSection.clicked.connect(
             self.zoom_to_section)
         self.widget.pushButton_PkFtSectionSavetoXLS.clicked.\
             connect(self.save_to_xls)
         self.widget.pushButton_PkFtSectionImport.clicked.connect(
             self.import_section_from_param)
-        self.widget.pushButton_PlotSelectedPkFtResults.clicked.connect(
-            self._plot_selected_fitting)
         # The line below exist in session_ctrl
         # self.widget.pushButton_PkFtSectionSavetoDPP.clicked.coonect
-
-    def _plot_selected_fitting(self):
-        self.plot_ctrl.update_to_gsas_style()
 
     def import_section_from_param(self):
         if not self.model.base_ptn_exist():
@@ -92,67 +85,6 @@ class PeakFitController(object):
         self.plot_ctrl.update(
             limits=(x_range[0], x_range[1],
                     y_range[0] - margin, y_range[1] + margin))
-
-    def get_peaks_from_jcpds(self):
-        if not self.model.jcpds_exist():
-            return
-        i = 0
-        for j in self.model.jcpds_lst:
-            if j.display:
-                i += 1
-        if i == 0:
-            return
-        if not self.model.current_section_exist():
-            QtWidgets.QMessageBox.warning(self.widget, "Warning",
-                                          "Set a section first.")
-            return
-        else:
-            if self.model.current_section.fitted():
-                reply = QtWidgets.QMessageBox.question(
-                    self.widget, "Question",
-                    "Are you OK with clearing any unsaved results?",
-                    QtWidgets.QMessageBox.Yes | QtWidgets.QMessageBox.No,
-                    QtWidgets.QMessageBox.Yes)
-                if reply == QtWidgets.QMessageBox.No:
-                    return
-                else:
-                    self.clear_this_section()
-            else:
-                pass
-        x_range = self.model.current_section.get_xrange()
-        # Keep queue consistent with current section bounds.
-        x_min, x_max = min(x_range), max(x_range)
-        self.model.current_section.peaks_in_queue = [
-            p for p in self.model.current_section.peaks_in_queue
-            if (p.get('center', x_min) >= x_min) and (p.get('center', x_max) <= x_max)
-        ]
-        peaks = []
-        int_threshold = float(
-            self.widget.spinBox_PeaksFromJlistIntensity.value())
-        for j in self.model.jcpds_lst:
-            if j.display:
-                tths, intensities = j.get_tthVSint(
-                    self.widget.doubleSpinBox_SetWavelength.value())
-                for ii in range(tths.__len__()):
-                    tth = float(tths[ii])
-                    if (tth >= x_min) and (tth <= x_max) and \
-                            (intensities[ii] >= int_threshold):
-                        """
-                        height = \
-                            self.model.current_section.get_nearest_intensity(tth)
-                        """
-                        width = self.widget.doubleSpinBox_InitialFWHM.value()
-                        hkl = [j.DiffLines[ii].h, j.DiffLines[ii].k,
-                               j.DiffLines[ii].l]
-                        phasename = j.name
-                        self.model.current_section.set_single_peak(
-                            tth, width, hkl=hkl, phase_name=phasename)
-                    else:
-                        pass
-        self.set_tableWidget_PkParams_unsaved()
-        self.peakfit_table_ctrl.update_peak_parameters()
-        self.peakfit_table_ctrl.update_peak_constraints()
-        self.plot_ctrl.update()
 
     def get_style_for_unsaved(self):
         return "Background-color:rgb(255,204,255);color:rgb(0,0,0);"
@@ -219,7 +151,6 @@ class PeakFitController(object):
         self.model.set_this_section_current(idx)
         self.peakfit_table_ctrl.update_peak_parameters()
         self.peakfit_table_ctrl.update_sections()
-        self.peakfit_table_ctrl.update_baseline_constraints()
         self.peakfit_table_ctrl.update_peak_constraints()
         """
         self._list_peaks()
@@ -280,7 +211,6 @@ class PeakFitController(object):
 
     def _clear_current_section(self):
         '''erase only current section'''
-        self.widget.tableWidget_BackgroundConstraints.clearContents()
         self.widget.tableWidget_PeakConstraints.clearContents()
         self.widget.tableWidget_PkParams.clearContents()
         self.model.initialize_current_section()
@@ -295,7 +225,6 @@ class PeakFitController(object):
         self.model.initialize_current_section()
         self.widget.tableWidget_PkParams.clearContents()
         self.widget.tableWidget_PeakConstraints.clearContents()
-        self.widget.tableWidget_BackgroundConstraints.clearContents()
         self.peakfit_table_ctrl.update_sections()
         self.plot_ctrl.update()
 
@@ -386,7 +315,6 @@ class PeakFitController(object):
                                           'Fitting finished.')
             self.plot_ctrl.update()
             self.peakfit_table_ctrl.update_peak_parameters()
-            self.peakfit_table_ctrl.update_baseline_constraints()
             self.peakfit_table_ctrl.update_peak_constraints()
             self.set_tableWidget_PkParams_unsaved()
         else:

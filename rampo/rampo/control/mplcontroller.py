@@ -17,9 +17,6 @@ from matplotlib.widgets import MultiCursor
 #import matplotlib.pyplot as plt
 from qtpy import QtWidgets
 from qtpy import QtCore
-from ..ds_jcpds import convert_tth
-
-
 class MplController(object):
 
     def __init__(self, model, widget):
@@ -151,12 +148,6 @@ class MplController(object):
         data_limits = self._get_data_limits()
         self.update(limits=data_limits,
                     cake_ylimits=self._get_cake_y_limits())
-
-    def update_to_gsas_style(self):
-        if not self.model.base_ptn_exist():
-            return
-        data_limits = self._get_data_limits(y_margin=0.10)
-        self.update(limits=data_limits, gsas_style=True)
 
     def _get_data_limits(self, y_margin=0.):
         if self.widget.checkBox_BgSub.isChecked():
@@ -670,8 +661,14 @@ class MplController(object):
                     color=pattern.color)
                 """
                 if self.widget.checkBox_BgSub.isChecked():
+                    base_y = np.asarray(self.model.base_ptn.y_bgsub, dtype=float)
+                    if base_y.size == 0:
+                        continue
+                    y_span = float(np.nanmax(base_y) - np.nanmin(base_y))
+                    if (not np.isfinite(y_span)) or (y_span <= 0):
+                        y_span = float(np.nanmax(np.abs(base_y)))
                     ygap = self.widget.horizontalSlider_WaterfallGaps.value() * \
-                        self.model.base_ptn.y_bgsub.max() * float(j) / 100.
+                        y_span * float(j) / 10000.
                     y_bgsub = pattern.y_bgsub
                     if self.widget.checkBox_IntNorm.isChecked():
                         y = y_bgsub / y_bgsub.max() * \
@@ -680,19 +677,27 @@ class MplController(object):
                         y = y_bgsub
                     x_t = pattern.x_bgsub
                 else:
+                    base_y = np.asarray(self.model.base_ptn.y_raw, dtype=float)
+                    if base_y.size == 0:
+                        continue
+                    y_span = float(np.nanmax(base_y) - np.nanmin(base_y))
+                    if (not np.isfinite(y_span)) or (y_span <= 0):
+                        y_span = float(np.nanmax(np.abs(base_y)))
                     ygap = self.widget.horizontalSlider_WaterfallGaps.value() * \
-                        self.model.base_ptn.y_raw.max() * float(j) / 100.
+                        y_span * float(j) / 10000.
                     if self.widget.checkBox_IntNorm.isChecked():
                         y = pattern.y_raw / pattern.y_raw.max() *\
                             self.model.base_ptn.y_raw.max()
                     else:
                         y = pattern.y_raw
                     x_t = pattern.x_raw
-                if self.widget.checkBox_SetToBasePtnLambda.isChecked():
-                    x = convert_tth(x_t, pattern.wavelength,
-                                    self.model.base_ptn.wavelength)
-                else:
-                    x = x_t
+                x, y = self._get_smoothed_pattern_xy(x_t, y)
+                if x is None or y is None or len(x) == 0 or len(y) == 0:
+                    continue
+                if len(x) != len(y):
+                    n = min(len(x), len(y))
+                    x = x[:n]
+                    y = y[:n]
                 self.widget.mpl.canvas.ax_pattern.plot(
                     x, y + ygap, c=pattern.color, lw=float(
                         self.widget.comboBox_WaterfallLineThickness.

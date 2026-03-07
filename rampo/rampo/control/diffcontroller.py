@@ -78,6 +78,9 @@ class DiffController(object):
             self._on_scale_mode_changed)
         self.widget.doubleSpinBox_DiffVmin.valueChanged.connect(self._on_manual_range_changed)
         self.widget.doubleSpinBox_DiffVmax.valueChanged.connect(self._on_manual_range_changed)
+        if hasattr(self.widget, "pushButton_DiffScaleToData"):
+            self.widget.pushButton_DiffScaleToData.clicked.connect(
+                self._set_2d_scale_to_diff_range)
         self.widget.pushButton_ExportDiffChi.clicked.connect(self.export_diff_chi)
         self.widget.pushButton_ExportDiffCakeNpy.clicked.connect(self.export_diff_cake_npy)
 
@@ -317,16 +320,8 @@ class DiffController(object):
             return
         self.widget.label_DiffVmin.setText("Min")
         self.widget.label_DiffVmax.setText("Max")
-        if (not self.model.diff_img_exist()) or (not self.model.diff_state.has_ref_2d()):
-            return
         try:
-            int_cur, tth_cur, chi_cur = self.model.diff_img.get_cake()
-            int_cur = np.asarray(int_cur, dtype=float)
-            ref_interp = self._interp_ref_cake_to_current(tth_cur, chi_cur)
-            if ref_interp is None:
-                return
-            diff_arr = int_cur - ref_interp
-            finite = diff_arr[np.isfinite(diff_arr)]
+            finite = self._get_finite_diff_2d_values()
             if finite.size == 0:
                 return
             mn = np.min(finite)
@@ -337,6 +332,38 @@ class DiffController(object):
                 "Max ({})".format(self._format_value_for_label(mx)))
         except Exception:
             return
+
+    def _get_finite_diff_2d_values(self):
+        if (not self.model.diff_img_exist()) or (not self.model.diff_state.has_ref_2d()):
+            return np.asarray([], dtype=float)
+        int_cur, tth_cur, chi_cur = self.model.diff_img.get_cake()
+        int_cur = np.asarray(int_cur, dtype=float)
+        ref_interp = self._interp_ref_cake_to_current(tth_cur, chi_cur)
+        if ref_interp is None:
+            return np.asarray([], dtype=float)
+        diff_arr = int_cur - ref_interp
+        return diff_arr[np.isfinite(diff_arr)]
+
+    def _set_2d_scale_to_diff_range(self):
+        x_cur, y_cur = self._current_sample_curve()
+        if x_cur is None or y_cur is None:
+            finite = np.asarray([], dtype=float)
+        else:
+            __, y_diff = self.get_display_pattern(x_cur, y_cur)
+            y_diff = np.asarray(y_diff, dtype=float)
+            finite = y_diff[np.isfinite(y_diff)]
+        if finite.size == 0:
+            QtWidgets.QMessageBox.warning(
+                self.widget,
+                "No Diff Range",
+                "No spectrum diff data is available to determine Min/Max.",
+            )
+            return
+        self.widget.doubleSpinBox_DiffVmin.setValue(float(np.min(finite)))
+        self.widget.doubleSpinBox_DiffVmax.setValue(float(np.max(finite)))
+        self.sync_state_from_ui()
+        self._update_diff_minmax_labels()
+        self._trigger_plot_update()
 
     def _reload_reference_data(self, show_errors=False):
         st = self.model.diff_state
@@ -679,4 +706,53 @@ class DiffController(object):
         )[0]
         if fsave == "":
             return
-        np.save(fsave, np.asarray(int_out, dtype=float))
+        int_out = np.asarray(int_out, dtype=float)
+        tth_cur = np.asarray(tth_cur, dtype=float)
+        chi_cur = np.asarray(chi_cur, dtype=float)
+        np.save(fsave, int_out)
+        root, _ = os.path.splitext(fsave)
+        tth_path = root + "_tth.npy"
+        chi_path = root + "_chi.npy"
+        py_path = root + "_plot.py"
+        np.save(tth_path, tth_cur)
+        np.save(chi_path, chi_cur)
+        cfg = self.get_cake_render_config(int_out) or {}
+        cmap = cfg.get("cmap", "coolwarm")
+        vmin = float(cfg.get("vmin", self.model.diff_state.vmin_2d))
+        vmax = float(cfg.get("vmax", self.model.diff_state.vmax_2d))
+        center_zero = bool(cfg.get("center_zero", False))
+        script = (
+            "import numpy as np\n"
+            "import matplotlib.pyplot as plt\n"
+            "from matplotlib import colors as mcolors\n\n"
+            "def main():\n"
+            f"    intensity = np.load({os.path.basename(fsave)!r})\n"
+            f"    tth = np.load({os.path.basename(tth_path)!r})\n"
+            f"    chi = np.load({os.path.basename(chi_path)!r})\n"
+            f"    cmap = {cmap!r}\n"
+            f"    vmin = {vmin!r}\n"
+            f"    vmax = {vmax!r}\n"
+            f"    center_zero = {center_zero!r}\n"
+            "    fig, ax = plt.subplots(figsize=(7, 4.5), facecolor='white')\n"
+            "    ax.set_facecolor('white')\n"
+            "    im_kwargs = {\n"
+            "        'origin': 'lower',\n"
+            "        'extent': [float(np.nanmin(tth)), float(np.nanmax(tth)), float(np.nanmin(chi)), float(np.nanmax(chi))],\n"
+            "        'aspect': 'auto',\n"
+            "        'cmap': cmap,\n"
+            "    }\n"
+            "    if center_zero:\n"
+            "        im_kwargs['norm'] = mcolors.TwoSlopeNorm(vmin=vmin, vcenter=0.0, vmax=vmax)\n"
+            "    else:\n"
+            "        im_kwargs['vmin'] = vmin\n"
+            "        im_kwargs['vmax'] = vmax\n"
+            "    ax.imshow(intensity, **im_kwargs)\n"
+            "    ax.set_xlabel('Raman Shift (cm$^{-1}$)')\n"
+            "    ax.set_ylabel('CCD Pixel')\n"
+            "    fig.tight_layout()\n"
+            "    plt.show()\n\n"
+            "if __name__ == '__main__':\n"
+            "    main()\n"
+        )
+        with open(py_path, "w", encoding="utf-8") as fh:
+            fh.write(script)

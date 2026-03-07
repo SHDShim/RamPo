@@ -26,7 +26,8 @@ class CCDController(object):
         self.connect_channel()
 
     def connect_channel(self):
-        self.widget.pushButton_Info.clicked.connect(self.show_tif_header)
+        if hasattr(self.widget, "pushButton_Info"):
+            self.widget.pushButton_Info.clicked.connect(self.show_tif_header)
         self.widget.pushButton_ApplyCakeView.clicked.connect(self.update_cake)
         self.widget.pushButton_ApplyMask.clicked.connect(self.apply_mask)
         self.widget.pushButton_MaskReset.clicked.connect(self.reset_maskrange)

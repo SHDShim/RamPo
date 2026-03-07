@@ -210,13 +210,18 @@ class Spectrum(object):
     def read_bg_from_tempfile(self, temp_dir=None):
         bgsub_filen, bg_filen = self.make_temp_filenames(temp_dir=temp_dir)
         if os.path.exists(bgsub_filen) and os.path.exists(bg_filen):
-            roi, bg_params, x_bgsub, y_bgsub = readchi(bgsub_filen)
-            __, __, x_bg, y_bg = readchi(bg_filen)
+            roi, bg_params, x_bgsub, y_bgsub, meta_bgsub = readchi(
+                bgsub_filen, include_metadata=True)
+            __, __, x_bg, y_bg, meta_bg = readchi(
+                bg_filen, include_metadata=True)
             if len(bg_params) == 0:
                 bg_params = [3]
             else:
                 bg_params = [int(bg_params[0])]
-            self.set_bg(x_bg, y_bg, x_bgsub, y_bgsub, roi, bg_params)
+            fit_areas = meta_bgsub.get("bg_areas", []) or meta_bg.get("bg_areas", [])
+            self.set_bg(
+                x_bg, y_bg, x_bgsub, y_bgsub, roi, bg_params,
+                fit_areas=fit_areas)
             return True
         else:
             return False

@@ -2,7 +2,7 @@ import os
 from qtpy import QtWidgets
 from qtpy import QtCore
 from qtpy import QtGui
-from ..utils import SpinBoxFixStyle, extract_filename
+from ..utils import extract_filename
 from .mplcontroller import MplController
 
 
@@ -36,13 +36,13 @@ class WaterfallTableController(object):
         show a list of jcpds in the list window of tab 3
         called from maincontroller
         """
-        n_columns = 3
+        n_columns = 2
         n_rows = self.model.waterfall_ptn.__len__()  # count for number of jcpds
         self.widget.tableWidget_wfPatterns.setColumnCount(n_columns)
         self.widget.tableWidget_wfPatterns.setRowCount(n_rows)
         self.widget.tableWidget_wfPatterns.horizontalHeader().setVisible(True)
         self.widget.tableWidget_wfPatterns.setHorizontalHeaderLabels(
-            ['', '', 'Wavelength'])
+            ['', ''])
         self.widget.tableWidget_wfPatterns.setVerticalHeaderLabels(
             [extract_filename(wfp.fname) for wfp in self.model.waterfall_ptn])
         for row in range(n_rows):
@@ -61,33 +61,6 @@ class WaterfallTableController(object):
             self.widget.tableWidget_wfPatterns.setItem(row, 1, item2)
             self.widget.tableWidget_wfPatterns.item(row, 1).setBackground(
                 QtGui.QColor(self.model.waterfall_ptn[row].color))
-            # column 2 - wavelength
-            self.widget.tableWidget_wfPatterns_doubleSpinBox_wavelength = \
-                QtWidgets.QDoubleSpinBox()
-            self.widget.tableWidget_wfPatterns_doubleSpinBox_wavelength.\
-                setAlignment(
-                    QtCore.Qt.AlignRight | QtCore.Qt.AlignTrailing |
-                    QtCore.Qt.AlignVCenter)
-            self.widget.tableWidget_wfPatterns_doubleSpinBox_wavelength.\
-                setMaximum(2.0)
-            self.widget.tableWidget_wfPatterns_doubleSpinBox_wavelength.\
-                setSingleStep(0.0001)
-            self.widget.tableWidget_wfPatterns_doubleSpinBox_wavelength.\
-                setDecimals(4)
-            self.widget.tableWidget_wfPatterns_doubleSpinBox_wavelength.\
-                setProperty("value", self.model.waterfall_ptn[row].wavelength)
-            self.widget.tableWidget_wfPatterns_doubleSpinBox_wavelength.\
-                valueChanged.connect(
-                    self._handle_doubleSpinBoxChanged)
-            self.widget.tableWidget_wfPatterns_doubleSpinBox_wavelength.\
-                setStyle(SpinBoxFixStyle())
-            self.widget.tableWidget_wfPatterns.setCellWidget(
-                row, 2,
-                self.widget.tableWidget_wfPatterns_doubleSpinBox_wavelength)
-            self.widget.tableWidget_wfPatterns_doubleSpinBox_wavelength.\
-                setKeyboardTracking(False)
-            self.widget.tableWidget_wfPatterns_doubleSpinBox_wavelength.\
-                setFocusPolicy(QtCore.Qt.StrongFocus)
         self.widget.tableWidget_wfPatterns.resizeColumnsToContents()
 #        self.widget.tableWidget_wfPatterns.resizeRowsToContents()
         try:
@@ -98,14 +71,6 @@ class WaterfallTableController(object):
         self.widget.tableWidget_wfPatterns.itemClicked.connect(
             self._handle_ItemClicked)
         # self._apply_changes_to_graph(reinforced=True)
-
-    def _handle_doubleSpinBoxChanged(self, value):
-        box = self.widget.sender()
-        index = self.widget.tableWidget_wfPatterns.indexAt(box.pos())
-        if index.isValid():
-            idx = index.row()
-            self.model.waterfall_ptn[idx].wavelength = value
-            self._apply_changes_to_graph()
 
     def _handle_ItemClicked(self, item):
         idx = item.row()
