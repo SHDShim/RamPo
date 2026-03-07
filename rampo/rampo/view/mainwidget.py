@@ -641,7 +641,7 @@ class MainWindow(QtWidgets.QMainWindow, Ui_MainWindow):
         self.gridLayout_CakeTop = QtWidgets.QGridLayout(self.frame_CakeTopGrid)
         self.gridLayout_CakeTop.setContentsMargins(0, 0, 0, 0)
         self.gridLayout_CakeTop.setHorizontalSpacing(10)
-        self.gridLayout_CakeTop.setVerticalSpacing(8)
+        self.gridLayout_CakeTop.setVerticalSpacing(4)
 
         self.cake_hist_widget.check_log.setParent(self.frame_CakeTopGrid)
         self.cake_hist_widget.check_focus.setVisible(False)
@@ -696,7 +696,7 @@ class MainWindow(QtWidgets.QMainWindow, Ui_MainWindow):
         self.cake_hist_widget.canvas.setParent(self.groupBox_29)
 
         self.verticalLayout_11.setContentsMargins(10, 0, 10, 0)
-        self.verticalLayout_11.setSpacing(6)
+        self.verticalLayout_11.setSpacing(4)
         self.verticalLayout_11.addWidget(self.frame_CakeTopGrid)
         self.verticalLayout_11.addWidget(self.cake_hist_widget.canvas)
 
@@ -774,12 +774,25 @@ class MainWindow(QtWidgets.QMainWindow, Ui_MainWindow):
     def _reorder_spectrum_process_groups(self):
         if not hasattr(self, "verticalLayout_21"):
             return
-        if hasattr(self, "groupBox_CCDRoi"):
-            self.verticalLayout_21.removeWidget(self.groupBox_CCDRoi)
-            self.verticalLayout_21.insertWidget(0, self.groupBox_CCDRoi)
-        if hasattr(self, "groupBox_4"):
-            self.verticalLayout_21.removeWidget(self.groupBox_4)
-            self.verticalLayout_21.addWidget(self.groupBox_4)
+        layout = self.verticalLayout_21
+        ordered_widgets = []
+        for name in ("groupBox_CCDRoi", "groupBox_SpectrumSmooth", "groupBox_4"):
+            if hasattr(self, name):
+                widget = getattr(self, name)
+                layout.removeWidget(widget)
+                ordered_widgets.append(widget)
+
+        while layout.count():
+            item = layout.takeAt(0)
+            widget = item.widget()
+            if widget is not None:
+                if widget in ordered_widgets:
+                    continue
+                widget.setParent(self.scrollAreaWidgetContents_5)
+
+        for widget in ordered_widgets:
+            layout.addWidget(widget)
+        layout.addStretch(1)
 
     def _setup_diff_tab(self):
         # Build Diff tab with the same container pattern used by other tabs:
