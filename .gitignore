@@ -1,0 +1,14 @@
+# Backup only the Rampo app tree.
+peakpo/
+T-rax-develop/
+
+# Python
+__pycache__/
+*.py[cod]
+*.so
+
+# macOS
+.DS_Store
+
+# Local runtime artifacts
+*.log
