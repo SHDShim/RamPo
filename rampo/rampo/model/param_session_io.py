@@ -153,6 +153,15 @@ def _bg_temp_names(pattern):
     return f"{base}.bgsub.chi", f"{base}.bg.chi"
 
 
+def _processed_temp_name(pattern):
+    base = os.path.splitext(os.path.basename(pattern.fname))[0]
+    return f"{base}.chi"
+
+
+def _smoothed_temp_name():
+    return "smooth.chi"
+
+
 def _serialize_pattern(
         pattern, chi_root, fallback_relpath=None, force_abs_fname=False):
     if pattern is None:
@@ -199,6 +208,11 @@ def _load_pattern(payload, chi_root, temp_dir):
         ptn.x_raw = None
         ptn.y_raw = None
     ptn.wavelength = payload.get("wavelength", 0.3344)
+    if hasattr(ptn, "apply_excitation_wavelength"):
+        try:
+            ptn.apply_excitation_wavelength(ptn.wavelength)
+        except Exception:
+            pass
     ptn.color = payload.get("color", "white")
     ptn.display = payload.get("display", False)
     ptn._pkpo_original_fname = fname_primary
@@ -583,11 +597,12 @@ def _make_backup_id(param_dir):
             used.add(int(str(bid)))
         except Exception:
             continue
-    backups_dir = os.path.join(param_dir, "backups")
-    if os.path.isdir(backups_dir):
-        for name in os.listdir(backups_dir):
+    if os.path.isdir(param_dir):
+        for entry in os.scandir(param_dir):
+            if not entry.is_dir():
+                continue
             try:
-                used.add(int(str(name)))
+                used.add(int(str(entry.name)))
             except Exception:
                 continue
     next_id = 0 if not used else (max(used) + 1)
@@ -601,7 +616,10 @@ def _collect_companion_files(param_dir):
     Track legacy/session companion files in PARAM so their changes are included
     in backup snapshots as well.
     """
-    suffixes = (".poni", ".cake.npy", ".bg.chi", ".bgsub.chi", ".cakeformat")
+    suffixes = (
+        ".poni", ".cake.npy", ".bg.chi", ".bgsub.chi", ".cakeformat",
+        "smooth.chi",
+    )
     rel_files = set()
     if not os.path.isdir(param_dir):
         return []
@@ -728,11 +746,11 @@ def _safe_load_json(path):
         return None
 
 
-def _semantic_change_flags(param_dir, session_data, sections_data, jcpds_data, ui_data):
-    old_session = _safe_load_json(os.path.join(param_dir, SESSION_FILE))
-    old_sections = _safe_load_json(os.path.join(param_dir, SECTIONS_FILE))
-    old_jcpds = _safe_load_json(os.path.join(param_dir, JCPDS_FILE))
-    old_ui = _safe_load_json(os.path.join(param_dir, UI_STATE_FILE))
+def _semantic_change_flags(snapshot_dir, session_data, sections_data, jcpds_data, ui_data):
+    old_session = _safe_load_json(os.path.join(snapshot_dir, SESSION_FILE))
+    old_sections = _safe_load_json(os.path.join(snapshot_dir, SECTIONS_FILE))
+    old_jcpds = _safe_load_json(os.path.join(snapshot_dir, JCPDS_FILE))
+    old_ui = _safe_load_json(os.path.join(snapshot_dir, UI_STATE_FILE))
 
     # Fits significance: compare only saved sections list, not current_section.
     old_sections_list = [] if old_sections is None else old_sections.get("sections", [])
@@ -788,8 +806,22 @@ def _known_state_hashes(index):
 
 
 def _exclude_from_backup(rel_path):
-    rp = str(rel_path).lower()
-    return rp.endswith(".chi") or rp.endswith(".npy")
+    return False
+
+
+def _cleanup_param_root(param_dir):
+    keep_names = {BACKUP_INDEX_FILE}
+    if not os.path.isdir(param_dir):
+        return
+    for entry in os.scandir(param_dir):
+        if entry.name in keep_names:
+            continue
+        if entry.is_dir():
+            continue
+        try:
+            os.remove(entry.path)
+        except Exception:
+            pass
 
 
 def save_model_to_param(
@@ -797,19 +829,23 @@ def save_model_to_param(
         force_backup=False, create_backup=True):
     if model is None or (not model.base_ptn_exist()):
         raise ValueError("Base pattern must exist before saving PARAM session.")
-    param_dir = get_temp_dir(model.get_base_ptn_filename(), branch="-param")
+    param_dir = get_temp_dir(model.get_base_ptn_filename(), branch="-rampo")
     os.makedirs(param_dir, exist_ok=True)
 
     session_data, sections_data, jcpds_data, ui_data, section_payloads, waterfall_payloads = _prepare_payloads(
         model, param_dir=param_dir, ui_state=ui_state)
+    index_path = os.path.join(param_dir, BACKUP_INDEX_FILE)
+    index = _get_backup_index(index_path)
+    latest_snapshot_dir = _resolve_snapshot_dir(param_dir)
     existing_created_at = None
-    existing_manifest_path = os.path.join(param_dir, MANIFEST_FILE)
-    if os.path.exists(existing_manifest_path):
-        try:
-            existing_manifest = _load_json(existing_manifest_path)
-            existing_created_at = existing_manifest.get("created_at")
-        except Exception:
-            existing_created_at = None
+    if latest_snapshot_dir is not None:
+        existing_manifest_path = os.path.join(latest_snapshot_dir, MANIFEST_FILE)
+        if os.path.exists(existing_manifest_path):
+            try:
+                existing_manifest = _load_json(existing_manifest_path)
+                existing_created_at = existing_manifest.get("created_at")
+            except Exception:
+                existing_created_at = None
 
     manifest = {
         "format_family": FORMAT_FAMILY,
@@ -821,7 +857,7 @@ def save_model_to_param(
             "sections": SECTIONS_FILE,
             "jcpds": JCPDS_FILE,
             "ui_state": UI_STATE_FILE,
-            "backup_index": BACKUP_INDEX_FILE,
+            "backup_index": os.path.join("..", BACKUP_INDEX_FILE),
         },
     }
 
@@ -837,10 +873,15 @@ def save_model_to_param(
     payload_map.update(section_payloads)
     payload_map.update(waterfall_payloads)
 
-    # Keep background information as chi files in PARAM.
+    # Build companion files in the top-level param dir first, then move
+    # the resulting payloads into the numbered snapshot only.
     if model.base_ptn is not None:
         try:
             model.base_ptn.write_temporary_bgfiles(temp_dir=param_dir)
+        except Exception:
+            pass
+        try:
+            model.base_ptn.write_temporary_processed_file(temp_dir=param_dir)
         except Exception:
             pass
     if model.waterfall_ptn:
@@ -870,15 +911,20 @@ def save_model_to_param(
             if rel is not None:
                 payload_map[rel] = _compute_np_payload(model.diff_img.mask)
 
-    # Add BG chi files to tracked payload so they can be backed up/restored.
+    # Add processed and BG chi files to tracked payload so they are backed up/restored.
     for ptn in [model.base_ptn] + list(model.waterfall_ptn):
         if ptn is None:
             continue
+        processed_name = _processed_temp_name(ptn)
         bgsub_name, bg_name = _bg_temp_names(ptn)
-        for rel in (bgsub_name, bg_name):
+        for rel in (processed_name, bgsub_name, bg_name):
             full = os.path.join(param_dir, rel)
             if os.path.exists(full):
                 payload_map[rel] = _file_bytes(full)
+    smooth_name = _smoothed_temp_name()
+    smooth_full = os.path.join(param_dir, smooth_name)
+    if os.path.exists(smooth_full):
+        payload_map[smooth_name] = _file_bytes(smooth_full)
 
     # Include companion files (e.g., poni/cakeformat/cake npy/bg chi) in
     # change detection + backups, preserving historical PARAM usage.
@@ -888,8 +934,9 @@ def save_model_to_param(
             payload_map[rel] = _file_bytes(full)
 
     changed_files_all = []
+    compare_root = latest_snapshot_dir if latest_snapshot_dir is not None else param_dir
     for rel_path, new_bytes in payload_map.items():
-        full_path = os.path.join(param_dir, rel_path)
+        full_path = os.path.join(compare_root, rel_path)
         if _file_differs_from_payload(full_path, new_bytes):
             changed_files_all.append(rel_path)
 
@@ -901,13 +948,11 @@ def save_model_to_param(
     changed_files = [p for p in changed_files_all if p in backup_payload_map]
     delta_files = list(changed_files)
     semantic_flags = _semantic_change_flags(
-        param_dir, session_data, sections_data, jcpds_data, ui_data)
+        compare_root, session_data, sections_data, jcpds_data, ui_data)
     state_hash = _compute_state_hash(backup_payload_map)
 
     backup_id = None
     backup_root = None
-    index_path = os.path.join(param_dir, BACKUP_INDEX_FILE)
-    index = _get_backup_index(index_path)
     known_hashes = _known_state_hashes(index)
     state_already_known = state_hash in known_hashes
 
@@ -916,21 +961,13 @@ def save_model_to_param(
         # Avoid duplicate backups for states that already exist in history.
         create_backup_event = False
 
+    snapshot_files = sorted(backup_payload_map.keys())
     if create_backup_event:
-        # Store full post-save snapshot so each backup row maps 1:1 to
-        # what gets restored (avoids pre/post mismatch confusion).
-        snapshot_files = sorted(backup_payload_map.keys())
         backup_id = _make_backup_id(param_dir)
-        backup_root = os.path.join(param_dir, "backups", backup_id)
+        backup_root = os.path.join(param_dir, backup_id)
         for rel_path in snapshot_files:
             dst = os.path.join(backup_root, rel_path)
             _atomic_write_bytes(dst, backup_payload_map[rel_path])
-
-    for rel_path in changed_files_all:
-        _atomic_write_bytes(
-            os.path.join(param_dir, rel_path),
-            payload_map[rel_path],
-        )
 
     if create_backup_event:
         highlights = _highlights_from_flags(semantic_flags, force_backup=force_backup)
@@ -946,11 +983,14 @@ def save_model_to_param(
                 "state_hash": state_hash,
             }
         )
+        index["latest_backup_id"] = backup_id
     _atomic_write_json(index_path, index)
+
+    _cleanup_param_root(param_dir)
 
     return SaveResult(
         param_dir=param_dir,
-        manifest_path=os.path.join(param_dir, MANIFEST_FILE),
+        manifest_path=os.path.join(backup_root, MANIFEST_FILE) if backup_root is not None else "",
         backup_id=backup_id,
         changed_files=changed_files_all,
     )
@@ -962,14 +1002,21 @@ def _load_json(path):
 
 
 def is_new_param_folder(param_dir):
-    manifest = os.path.join(param_dir, MANIFEST_FILE)
-    if not os.path.exists(manifest):
-        return False
     try:
-        data = _load_json(manifest)
+        index = _get_backup_index(os.path.join(param_dir, BACKUP_INDEX_FILE))
     except Exception:
         return False
-    return data.get("format_family") == FORMAT_FAMILY
+    if index.get("format_family") != FORMAT_FAMILY:
+        return False
+    events = index.get("events", [])
+    if not isinstance(events, list) or len(events) == 0:
+        return False
+    latest_id = index.get("latest_backup_id")
+    if latest_id in (None, ""):
+        latest_id = events[-1].get("id")
+    if latest_id in (None, ""):
+        return False
+    return os.path.isdir(os.path.join(param_dir, str(latest_id)))
 
 
 def list_backup_events(param_dir):
@@ -978,81 +1025,64 @@ def list_backup_events(param_dir):
     return index.get("events", [])
 
 
-def restore_to_backup_event(param_dir, event_id=None, event_index=None):
+def _resolve_snapshot_dir(param_dir, event_id=None, event_index=None):
     events = list_backup_events(param_dir)
     if not events:
-        return False
+        return None
     if event_index is not None:
         if (event_index < 0) or (event_index >= len(events)):
-            return False
+            return None
         target_pos = int(event_index)
     else:
+        if event_id is None:
+            index = _get_backup_index(os.path.join(param_dir, BACKUP_INDEX_FILE))
+            event_id = index.get("latest_backup_id")
+            if event_id in (None, "") and events:
+                event_id = events[-1].get("id")
         ids = [e.get("id") for e in events]
         if event_id not in ids:
-            return False
-        # If duplicate ids exist in legacy index files, prefer the latest
-        # matching one for deterministic behavior.
+            return None
         target_pos = max(i for i, _id in enumerate(ids) if _id == event_id)
-
     target_evt = events[target_pos]
-    target_mode = target_evt.get("snapshot_mode", "")
-    if target_mode == "full":
-        snap_dir = os.path.join(param_dir, "backups", target_evt.get("id", ""))
-        rel_files = target_evt.get("snapshot_files", [])
-        for rel_path in rel_files:
-            src = os.path.join(snap_dir, rel_path)
-            dst = os.path.join(param_dir, rel_path)
-            if os.path.exists(src):
-                os.makedirs(os.path.dirname(dst), exist_ok=True)
-                shutil.copy2(src, dst)
-        return True
+    snap_dir = os.path.join(param_dir, str(target_evt.get("id", "")))
+    if not os.path.isdir(snap_dir):
+        return None
+    return snap_dir
 
-    # Legacy fallback for older pre/post mixed snapshots.
-    for i in range(len(events) - 1, target_pos - 1, -1):
-        evt = events[i]
-        snap_dir = os.path.join(param_dir, "backups", evt.get("id", ""))
-        rel_files = evt.get("snapshot_files")
-        if not isinstance(rel_files, list):
-            rel_files = evt.get("changed_files", [])
-        for rel_path in rel_files:
-            src = os.path.join(snap_dir, rel_path)
-            dst = os.path.join(param_dir, rel_path)
-            if os.path.exists(src):
-                os.makedirs(os.path.dirname(dst), exist_ok=True)
-                shutil.copy2(src, dst)
-    return True
+
+def restore_to_backup_event(param_dir, event_id=None, event_index=None):
+    return _resolve_snapshot_dir(param_dir, event_id=event_id, event_index=event_index) is not None
 
 
 def load_model_from_param(model, base_chi_file, backup_event_id=None, backup_event_index=None):
     chi_root = os.path.dirname(base_chi_file)
-    param_dir = get_temp_dir(base_chi_file, branch="-param")
+    param_dir = get_temp_dir(base_chi_file, branch="-rampo")
     if not is_new_param_folder(param_dir):
         return False, {"reason": "missing-or-invalid-manifest", "param_dir": param_dir}
 
-    if (backup_event_id is not None) or (backup_event_index is not None):
-        ok = restore_to_backup_event(
-            param_dir,
-            event_id=backup_event_id,
-            event_index=backup_event_index,
-        )
-        if not ok:
-            return False, {
-                "reason": "invalid-backup-id",
-                "param_dir": param_dir,
-                "backup_id": backup_event_id,
-                "backup_index": backup_event_index,
-            }
+    snapshot_dir = _resolve_snapshot_dir(
+        param_dir,
+        event_id=backup_event_id,
+        event_index=backup_event_index,
+    )
+    if snapshot_dir is None:
+        return False, {
+            "reason": "invalid-backup-id",
+            "param_dir": param_dir,
+            "backup_id": backup_event_id,
+            "backup_index": backup_event_index,
+        }
 
-    manifest = _load_json(os.path.join(param_dir, MANIFEST_FILE))
+    manifest = _load_json(os.path.join(snapshot_dir, MANIFEST_FILE))
     files = manifest.get("files", {})
-    session_data = _load_json(os.path.join(param_dir, files.get("session", SESSION_FILE)))
-    sections_data = _load_json(os.path.join(param_dir, files.get("sections", SECTIONS_FILE)))
-    jcpds_data = _load_json(os.path.join(param_dir, files.get("jcpds", JCPDS_FILE)))
-    ui_data = _load_json(os.path.join(param_dir, files.get("ui_state", UI_STATE_FILE)))
+    session_data = _load_json(os.path.join(snapshot_dir, files.get("session", SESSION_FILE)))
+    sections_data = _load_json(os.path.join(snapshot_dir, files.get("sections", SECTIONS_FILE)))
+    jcpds_data = _load_json(os.path.join(snapshot_dir, files.get("jcpds", JCPDS_FILE)))
+    ui_data = _load_json(os.path.join(snapshot_dir, files.get("ui_state", UI_STATE_FILE)))
 
-    model.base_ptn = _load_pattern(session_data.get("base_pattern"), chi_root, param_dir)
+    model.base_ptn = _load_pattern(session_data.get("base_pattern"), chi_root, snapshot_dir)
     model.waterfall_ptn = [
-        _load_pattern(p, chi_root, param_dir)
+        _load_pattern(p, chi_root, snapshot_dir)
         for p in session_data.get("waterfall_patterns", [])
     ]
     fallback_waterfall = []
@@ -1069,7 +1099,7 @@ def load_model_from_param(model, base_chi_file, backup_event_id=None, backup_eve
     loaded_sections = []
     old_to_new_idx = {}
     for old_idx, sec_payload in enumerate(sections_data.get("sections", [])):
-        sec_obj = _dict_to_section(sec_payload, param_dir, missing_files=missing_section_csv_files)
+        sec_obj = _dict_to_section(sec_payload, snapshot_dir, missing_files=missing_section_csv_files)
         x_arr = getattr(sec_obj, "x", None)
         if (x_arr is None) or (len(x_arr) == 0):
             continue
@@ -1082,7 +1112,7 @@ def load_model_from_param(model, base_chi_file, backup_event_id=None, backup_eve
     model.current_section = None
     if current_payload is not None:
         current_section = _dict_to_section(
-            current_payload, param_dir, missing_files=missing_section_csv_files)
+            current_payload, snapshot_dir, missing_files=missing_section_csv_files)
         if (getattr(current_section, "x", None) is None) or (len(current_section.x) == 0):
             current_section = None
         mapped_idx = old_to_new_idx.get(current_idx) if isinstance(current_idx, int) else None
@@ -1121,28 +1151,34 @@ def load_model_from_param(model, base_chi_file, backup_event_id=None, backup_eve
         cake_azi_file = diff_img_info.get("cake_azi_file")
         cake_int_file = diff_img_info.get("cake_int_file")
         if mask_file is not None:
-            f = os.path.join(param_dir, mask_file)
+            f = os.path.join(snapshot_dir, mask_file)
             if os.path.exists(f):
                 diff.mask = np.load(f, allow_pickle=False)
         if cake_tth_file is not None:
-            f = os.path.join(param_dir, cake_tth_file)
+            f = os.path.join(snapshot_dir, cake_tth_file)
             if os.path.exists(f):
                 diff.tth_cake = np.load(f, allow_pickle=False)
         if cake_azi_file is not None:
-            f = os.path.join(param_dir, cake_azi_file)
+            f = os.path.join(snapshot_dir, cake_azi_file)
             if os.path.exists(f):
                 diff.chi_cake = np.load(f, allow_pickle=False)
         if cake_int_file is not None:
-            f = os.path.join(param_dir, cake_int_file)
+            f = os.path.join(snapshot_dir, cake_int_file)
             if os.path.exists(f):
                 diff.intensity_cake = np.load(f, allow_pickle=False)
         model.diff_img = diff
+        try:
+            if hasattr(model.diff_img, "apply_excitation_wavelength") and \
+                    hasattr(model.base_ptn, "wavelength"):
+                model.diff_img.apply_excitation_wavelength(model.base_ptn.wavelength)
+        except Exception:
+            pass
     else:
         model.diff_img = None
 
     return True, {
         "param_dir": param_dir,
-        "manifest": os.path.join(param_dir, MANIFEST_FILE),
+        "manifest": os.path.join(snapshot_dir, MANIFEST_FILE),
         "ui_state": ui_data.get("ui_state", {}),
         "missing_section_csv_files": sorted(set(missing_section_csv_files)),
         "fallback_waterfall_files": sorted(set([x for x in fallback_waterfall if x])),
@@ -1151,6 +1187,7 @@ def load_model_from_param(model, base_chi_file, backup_event_id=None, backup_eve
             "jcpds": (len(phase_payloads) > 0),
             "pressure": (("saved_pressure" in jcpds_data) or ("saved_pressure" in session_data)),
             "temperature": (("saved_temperature" in jcpds_data) or ("saved_temperature" in session_data)),
+            "spectrum_smoothing": (ui_data.get("ui_state", {}).get("spectrum", {}) != {}),
             "cake_z_scale": (ui_data.get("ui_state", {}).get("cake", {}) != {}),
             "ccd_roi": (ui_data.get("ui_state", {}).get("ccd_roi", {}) != {}),
             "background": (ui_data.get("ui_state", {}).get("background", {}) != {}),
@@ -1171,17 +1208,20 @@ def load_section_from_param(base_chi_file, section_index):
     """
     if base_chi_file is None:
         return None
-    param_dir = get_temp_dir(base_chi_file, branch="-param")
+    param_dir = get_temp_dir(base_chi_file, branch="-rampo")
     if not is_new_param_folder(param_dir):
         return None
     try:
-        manifest = _load_json(os.path.join(param_dir, MANIFEST_FILE))
+        snapshot_dir = _resolve_snapshot_dir(param_dir)
+        if snapshot_dir is None:
+            return None
+        manifest = _load_json(os.path.join(snapshot_dir, MANIFEST_FILE))
         files = manifest.get("files", {})
-        sections_data = _load_json(os.path.join(param_dir, files.get("sections", SECTIONS_FILE)))
+        sections_data = _load_json(os.path.join(snapshot_dir, files.get("sections", SECTIONS_FILE)))
         sections = sections_data.get("sections", [])
         idx = int(section_index)
         if (idx < 0) or (idx >= len(sections)):
             return None
-        return _dict_to_section(sections[idx], param_dir)
+        return _dict_to_section(sections[idx], snapshot_dir)
     except Exception:
         return None

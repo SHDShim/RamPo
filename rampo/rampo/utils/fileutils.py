@@ -46,9 +46,28 @@ def readchi(filen):
     """
     with open(filen) as f:
         content = f.readlines()
-    roi = re.findall(r"[-+]?\d*\.\d+|\d+", content[0])
-    bg_params = re.findall(r"[-+]?\d*\.\d+|\d+", content[1])
-    data = np.loadtxt(filen, skiprows=4)
+    roi = re.findall(r"[-+]?\d*\.\d+|\d+", content[0]) if len(content) > 0 else []
+    bg_params = re.findall(r"[-+]?\d*\.\d+|\d+", content[1]) if len(content) > 1 else []
+
+    data_rows = []
+    for line in content:
+        stripped = line.strip()
+        if not stripped or stripped.startswith('#'):
+            continue
+        parts = stripped.split()
+        if len(parts) != 2:
+            continue
+        try:
+            x_val = float(parts[0])
+            y_val = float(parts[1])
+        except ValueError:
+            continue
+        data_rows.append((x_val, y_val))
+
+    if not data_rows:
+        raise ValueError(f"No numeric CHI data found in {filen}")
+
+    data = np.asarray(data_rows, dtype=float)
     x, y = data.T
     return [float(r) for r in roi], [int(b) for b in bg_params], x, y
 

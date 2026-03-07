@@ -73,10 +73,21 @@ class BaseSpectrumController(object):
         #    '1D Pattern: ' + self.model.get_base_ptn_filename())
         self.widget.lineEdit_DiffractionPatternFileName.setText(
             str(self.model.get_base_ptn_filename()))
+        main_ctrl = getattr(self.widget, "_main_controller", None)
+        if main_ctrl is not None and hasattr(main_ctrl, "sync_background_roi_spinboxes"):
+            try:
+                main_ctrl.sync_background_roi_spinboxes(force_full_range=True)
+            except Exception:
+                pass
         # Prefer loading full PARAM session state when available for this CHI.
         if self.session_ctrl is not None:
             loaded_param = self.session_ctrl.autoload_param_for_chi(new_filename)
             if loaded_param:
+                if self.ccd_ctrl._is_spe_source():
+                    try:
+                        self.ccd_ctrl.process_temp_cake()
+                    except Exception:
+                        pass
                 # Ensure File > Data backup table reflects the newly loaded CHI
                 # immediately, without requiring tab changes.
                 self.session_ctrl.refresh_backup_table()
@@ -87,7 +98,7 @@ class BaseSpectrumController(object):
                 ": Receive request to open ", 
                 str(self.model.get_base_ptn_filename()))
         temp_dir = get_temp_dir(self.model.get_base_ptn_filename())
-        if self.widget.checkBox_UseTempBGSub.isChecked():
+        if True:
             if os.path.exists(temp_dir):
                 success = self.model.base_ptn.read_bg_from_tempfile(
                     temp_dir=temp_dir)
@@ -104,43 +115,51 @@ class BaseSpectrumController(object):
                 self._update_bgsub_from_current_values()
                 print(str(datetime.datetime.now())[:-7], 
                     ': No temp chi file found. Force new bgsub fit.')
-        else:
-            self._update_bgsub_from_current_values()
-            print(str(datetime.datetime.now())[:-7], 
-                ': Temp chi ignored. Force new bgsub fit.')
         if (not self.ccd_ctrl._is_spe_source()) and \
                 (not self.model.associated_image_exists()) and \
-                (not self.widget.checkBox_IgnoreRawDataExistence.isChecked()):
-            self.widget.checkBox_ShowCake.setChecked(False)
+                (not self.ccd_ctrl._ignore_raw_data_missing()):
             return
 
-        if self.widget.checkBox_ShowCake.isChecked():
-            success = self.ccd_ctrl.process_temp_cake()
-            if (not success) and \
-                    self.widget.checkBox_IgnoreRawDataExistence.isChecked() and \
-                    (not self.model.associated_image_exists()):
-                QtWidgets.QMessageBox.warning(
-                    self.widget, 'Warning',
-                    'Rampo cannot process the CCD view: no raw image and no existing cached files were found.')
-                self.widget.checkBox_ShowCake.setChecked(False)
+        success = self.ccd_ctrl.process_temp_cake()
+        if (not success) and \
+                self.ccd_ctrl._ignore_raw_data_missing() and \
+                (not self.model.associated_image_exists()):
+            QtWidgets.QMessageBox.warning(
+                self.widget, 'Warning',
+                'Rampo cannot process the CCD view: no raw image and no existing cached files were found.')
         # Keep backup table in File > Data synchronized right after CHI load.
         if self.session_ctrl is not None:
             self.session_ctrl.refresh_backup_table()
 
     def _update_bg_params_in_widget(self):
-        self.widget.spinBox_BGParam0.setValue(
-            self.model.base_ptn.params_chbg[0])
         self.widget.spinBox_BGParam1.setValue(
-            self.model.base_ptn.params_chbg[1])
-        self.widget.spinBox_BGParam2.setValue(
-            self.model.base_ptn.params_chbg[2])
+            self.model.base_ptn.params_chbg[0])
         self.widget.doubleSpinBox_Background_ROI_min.setValue(
             self.model.base_ptn.roi[0])
         self.widget.doubleSpinBox_Background_ROI_max.setValue(
             self.model.base_ptn.roi[1])
 
     def _update_bgsub_from_current_values(self):
+        fit_areas = []
+        table = getattr(self.widget, "tableWidget_BackgroundConstraints", None)
+        if table is not None:
+            for row in range(table.rowCount()):
+                item_min = table.item(row, 0)
+                item_max = table.item(row, 1)
+                if item_min is None or item_max is None:
+                    continue
+                try:
+                    xmin = float(item_min.text())
+                    xmax = float(item_max.text())
+                except Exception:
+                    continue
+                if xmax < xmin:
+                    xmin, xmax = xmax, xmin
+                fit_areas.append([xmin, xmax])
         x_raw, y_raw = self.model.base_ptn.get_raw()
+        __, y_fit = self.plot_ctrl._get_smoothed_pattern_xy(x_raw, y_raw)
+        if not self.plot_ctrl._smoothing_active():
+            y_fit = y_raw
         if (x_raw.min() >= self.widget.doubleSpinBox_Background_ROI_min.value()) or \
                 (x_raw.max() <= self.widget.doubleSpinBox_Background_ROI_min.value()):
             self.widget.doubleSpinBox_Background_ROI_min.setValue(x_raw.min())
@@ -150,9 +169,10 @@ class BaseSpectrumController(object):
         self.model.base_ptn.subtract_bg(
             [self.widget.doubleSpinBox_Background_ROI_min.value(),
                 self.widget.doubleSpinBox_Background_ROI_max.value()],
-            [self.widget.spinBox_BGParam0.value(),
-                self.widget.spinBox_BGParam1.value(),
-                self.widget.spinBox_BGParam2.value()], yshift=0)
+            [self.widget.spinBox_BGParam1.value()],
+            yshift=0,
+            fit_areas=fit_areas,
+            y_source=y_fit)
         temp_dir = get_temp_dir(self.model.get_base_ptn_filename())
         self.model.base_ptn.write_temporary_bgfiles(temp_dir)
 

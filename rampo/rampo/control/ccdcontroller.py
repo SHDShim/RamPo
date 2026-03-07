@@ -1,8 +1,8 @@
 import os
 import glob
-from qtpy import QtWidgets
+from qtpy import QtWidgets, QtCore
 import numpy as np
-from matplotlib.widgets import RectangleSelector
+import matplotlib.patches as patches
 from ..utils import get_temp_dir, extract_extension, InformationBox
 from .mplcontroller import MplController
 from .ccdprocesscontroller import CCDProcessController
@@ -18,12 +18,15 @@ class CCDController(object):
         self.ccdprocess_ctrl = CCDProcessController(self.model, self.widget)
         self.plot_ctrl = MplController(self.model, self.widget)
         self._row_roi_selector = None
+        self._row_roi_press_cid = None
+        self._row_roi_motion_cid = None
+        self._row_roi_release_cid = None
+        self._row_roi_press_y = None
+        self._row_roi_preview = None
         self.connect_channel()
 
     def connect_channel(self):
         self.widget.pushButton_Info.clicked.connect(self.show_tif_header)
-        self.widget.checkBox_ShowCake.clicked.connect(
-            self.addremove_cake)
         self.widget.pushButton_ApplyCakeView.clicked.connect(self.update_cake)
         self.widget.pushButton_ApplyMask.clicked.connect(self.apply_mask)
         self.widget.pushButton_MaskReset.clicked.connect(self.reset_maskrange)
@@ -36,7 +39,7 @@ class CCDController(object):
             self.widget.spinBox_CCDRowMax.valueChanged.connect(
                 self._on_row_roi_spin_changed)
         if hasattr(self.widget, "pushButton_CCDSelectRoi"):
-            self.widget.pushButton_CCDSelectRoi.clicked.connect(
+            self.widget.pushButton_CCDSelectRoi.toggled.connect(
                 self._toggle_row_roi_selector)
         if hasattr(self.widget, "pushButton_CCDFullRoi"):
             self.widget.pushButton_CCDFullRoi.clicked.connect(
@@ -44,6 +47,12 @@ class CCDController(object):
         if hasattr(self.widget, "comboBox_CakeColormap"):
             self.widget.comboBox_CakeColormap.currentIndexChanged.connect(
                 self._apply_changes_to_graph)
+        if hasattr(self.widget, "doubleSpinBox_CCDScaleMin"):
+            self.widget.doubleSpinBox_CCDScaleMin.valueChanged.connect(
+                self._on_cake_scale_spin_changed)
+        if hasattr(self.widget, "doubleSpinBox_CCDScaleMax"):
+            self.widget.doubleSpinBox_CCDScaleMax.valueChanged.connect(
+                self._on_cake_scale_spin_changed)
         if hasattr(self.widget, "cake_hist_widget"):
             self.widget.cake_hist_widget.boundChanged.connect(
                 self._set_cake_bound_from_hist)
@@ -139,11 +148,31 @@ class CCDController(object):
             roi_max = float(x_raw.max())
             self.widget.doubleSpinBox_Background_ROI_max.setValue(roi_max)
         params = [
-            int(self.widget.spinBox_BGParam0.value()),
             int(self.widget.spinBox_BGParam1.value()),
-            int(self.widget.spinBox_BGParam2.value()),
         ]
-        self.model.base_ptn.get_chbg([roi_min, roi_max], params, yshift=0)
+        x_raw, y_raw = self.model.base_ptn.get_raw()
+        __, y_fit = self.plot_ctrl._get_smoothed_pattern_xy(x_raw, y_raw)
+        if not self.plot_ctrl._smoothing_active():
+            y_fit = y_raw
+        fit_areas = []
+        table = getattr(self.widget, "tableWidget_BackgroundConstraints", None)
+        if table is not None:
+            for row in range(table.rowCount()):
+                item_min = table.item(row, 0)
+                item_max = table.item(row, 1)
+                if item_min is None or item_max is None:
+                    continue
+                try:
+                    xmin = float(item_min.text())
+                    xmax = float(item_max.text())
+                except Exception:
+                    continue
+                if xmax < xmin:
+                    xmin, xmax = xmax, xmin
+                fit_areas.append([xmin, xmax])
+        self.model.base_ptn.get_chbg(
+            [roi_min, roi_max], params, yshift=0,
+            fit_areas=fit_areas, y_source=y_fit)
 
     def _on_row_roi_spin_changed(self, value):
         del value
@@ -163,37 +192,167 @@ class CCDController(object):
             self.widget.pushButton_CCDSelectRoi.setChecked(False)
             return
         self._deactivate_row_roi_selector()
-        self._row_roi_selector = RectangleSelector(
-            self.widget.mpl.canvas.ax_cake,
-            self._on_row_roi_selected,
-            useblit=True,
-            button=[1],
-            interactive=False,
-            drag_from_anywhere=False,
-        )
-
-    def _deactivate_row_roi_selector(self):
-        if self._row_roi_selector is not None:
+        toolbar = getattr(self.widget.mpl.canvas, "toolbar", None)
+        if toolbar is not None:
             try:
-                self._row_roi_selector.set_active(False)
+                if getattr(toolbar, "mode", "") == 'zoom rect':
+                    toolbar.zoom()
+                elif getattr(toolbar, "mode", "") == 'pan/zoom':
+                    toolbar.pan()
             except Exception:
                 pass
-            self._row_roi_selector = None
+        canvas = self.widget.mpl.canvas
+        self._row_roi_press_y = None
+        try:
+            canvas.setCursor(QtWidgets.QCursor(QtCore.Qt.CrossCursor))
+        except Exception:
+            pass
+        self._row_roi_press_cid = canvas.mpl_connect(
+            "button_press_event", self._on_row_roi_press)
+        self._row_roi_motion_cid = canvas.mpl_connect(
+            "motion_notify_event", self._on_row_roi_motion)
+        self._row_roi_release_cid = canvas.mpl_connect(
+            "button_release_event", self._on_row_roi_release)
+        if hasattr(self.widget, "pushButton_CCDSelectRoi"):
+            self.widget.pushButton_CCDSelectRoi.blockSignals(True)
+            self.widget.pushButton_CCDSelectRoi.setChecked(True)
+            self.widget.pushButton_CCDSelectRoi.blockSignals(False)
+        try:
+            self.widget.mpl.canvas.draw_idle()
+        except Exception:
+            pass
+
+    def _deactivate_row_roi_selector(self):
+        canvas = getattr(self.widget, "mpl", None)
+        canvas = getattr(canvas, "canvas", None)
+        if canvas is not None:
+            try:
+                if self._row_roi_press_cid is not None:
+                    canvas.mpl_disconnect(self._row_roi_press_cid)
+            except Exception:
+                pass
+            try:
+                if self._row_roi_motion_cid is not None:
+                    canvas.mpl_disconnect(self._row_roi_motion_cid)
+            except Exception:
+                pass
+            try:
+                if self._row_roi_release_cid is not None:
+                    canvas.mpl_disconnect(self._row_roi_release_cid)
+            except Exception:
+                pass
+        if self._row_roi_preview is not None:
+            try:
+                self._row_roi_preview.remove()
+            except Exception:
+                pass
+        self._row_roi_selector = None
+        self._row_roi_press_cid = None
+        self._row_roi_motion_cid = None
+        self._row_roi_release_cid = None
+        self._row_roi_press_y = None
+        self._row_roi_preview = None
+        canvas = getattr(self.widget, "mpl", None)
+        canvas = getattr(canvas, "canvas", None)
+        if canvas is not None:
+            try:
+                canvas.unsetCursor()
+            except Exception:
+                pass
         if hasattr(self.widget, "pushButton_CCDSelectRoi"):
             self.widget.pushButton_CCDSelectRoi.blockSignals(True)
             self.widget.pushButton_CCDSelectRoi.setChecked(False)
             self.widget.pushButton_CCDSelectRoi.blockSignals(False)
 
-    def _on_row_roi_selected(self, eclick, erelease):
-        if (eclick.ydata is None) or (erelease.ydata is None):
+    def _on_row_roi_press(self, event):
+        ax = getattr(self.widget.mpl.canvas, "ax_cake", None)
+        if event.inaxes != ax:
+            return
+        if event.button != 1 or event.ydata is None:
+            return
+        self._row_roi_press_y = float(event.ydata)
+        self._update_row_roi_preview(float(event.ydata))
+
+    def _on_row_roi_motion(self, event):
+        if self._row_roi_press_y is None:
+            return
+        ax = getattr(self.widget.mpl.canvas, "ax_cake", None)
+        y_now = self._event_y_to_cake_row(event, ax)
+        if y_now is None:
+            return
+        self._set_row_roi_spin_values_from_pixels(self._row_roi_press_y, y_now)
+        self._update_row_roi_preview(float(y_now))
+
+    def _on_row_roi_release(self, event):
+        if self._row_roi_press_y is None:
+            return
+        ax = getattr(self.widget.mpl.canvas, "ax_cake", None)
+        if event.button != 1:
+            self._deactivate_row_roi_selector()
+            return
+        y_release = self._event_y_to_cake_row(event, ax)
+        if y_release is None:
             self._deactivate_row_roi_selector()
             return
         img = getattr(self.model.diff_img, "img", None)
         if img is None or np.ndim(img) < 2:
             self._deactivate_row_roi_selector()
             return
-        ymin = int(np.floor(min(float(eclick.ydata), float(erelease.ydata))))
-        ymax = int(np.ceil(max(float(eclick.ydata), float(erelease.ydata))))
+        self._set_row_roi_spin_values_from_pixels(self._row_roi_press_y, y_release)
+        self._apply_row_roi_to_spectrum()
+        self._deactivate_row_roi_selector()
+
+    def _event_y_to_cake_row(self, event, ax):
+        if ax is None:
+            return None
+        if event.ydata is not None and event.inaxes == ax:
+            return float(event.ydata)
+        if event.y is None:
+            return None
+        try:
+            __, ydata = ax.transData.inverted().transform((event.x, event.y))
+            return float(ydata)
+        except Exception:
+            return None
+
+    def _update_row_roi_preview(self, y_current):
+        ax = getattr(self.widget.mpl.canvas, "ax_cake", None)
+        if ax is None:
+            return
+        try:
+            x0, x1 = ax.get_xlim()
+        except Exception:
+            return
+        y0 = min(float(self._row_roi_press_y), float(y_current))
+        y1 = max(float(self._row_roi_press_y), float(y_current))
+        if self._row_roi_preview is None:
+            self._row_roi_preview = patches.Rectangle(
+                (x0, y0),
+                (x1 - x0),
+                max(y1 - y0, 1.0),
+                linewidth=1.5,
+                edgecolor="#00e676",
+                facecolor="#00e676",
+                alpha=0.18,
+                linestyle="--",
+            )
+            ax.add_patch(self._row_roi_preview)
+        else:
+            self._row_roi_preview.set_x(x0)
+            self._row_roi_preview.set_y(y0)
+            self._row_roi_preview.set_width(x1 - x0)
+            self._row_roi_preview.set_height(max(y1 - y0, 1.0))
+        try:
+            self.widget.mpl.canvas.draw_idle()
+        except Exception:
+            pass
+
+    def _set_row_roi_spin_values_from_pixels(self, y0, y1):
+        img = getattr(self.model.diff_img, "img", None)
+        if img is None or np.ndim(img) < 2:
+            return
+        ymin = int(np.floor(min(float(y0), float(y1))))
+        ymax = int(np.ceil(max(float(y0), float(y1))))
         ymax = max(ymin, ymax - 1)
         n_rows = int(img.shape[0])
         ymin = max(0, min(ymin, n_rows - 1))
@@ -204,8 +363,6 @@ class CCDController(object):
         self.widget.spinBox_CCDRowMax.setValue(ymax)
         self.widget.spinBox_CCDRowMin.blockSignals(False)
         self.widget.spinBox_CCDRowMax.blockSignals(False)
-        self._apply_row_roi_to_spectrum()
-        self._deactivate_row_roi_selector()
 
     def _reset_row_roi_to_full(self):
         img = getattr(getattr(self.model, "diff_img", None), "img", None)
@@ -266,43 +423,51 @@ class CCDController(object):
         if hasattr(self.widget, "checkBox_Diff") and self.widget.checkBox_Diff.isChecked():
             return
         intensity_cake, _, _ = self.model.diff_img.get_cake()
-        self.widget.spinBox_MaxCakeScale.setValue(int(intensity_cake.max()))
+        arr = np.asarray(intensity_cake, dtype=float)
+        arr = arr[np.isfinite(arr)]
+        if arr.size == 0:
+            return
+        vmin = float(np.min(arr))
+        vmax = float(np.max(arr))
+        self._set_cake_scale_spinboxes(vmin, vmax)
         self._apply_changes_to_graph()
 
     def _apply_changes_to_graph(self):
         self.plot_ctrl.update()
 
     def _set_cake_bound_from_hist(self, bound_type, intensity_value):
-        prefactor = self.widget.spinBox_MaxCakeScale.value() / \
-            (10. ** self.widget.horizontalSlider_MaxScaleBars.value())
-        if prefactor <= 0:
-            return
-        current_min = self.widget.horizontalSlider_VMin.value()
-        current_max = self.widget.horizontalSlider_VMax.value()
-        slider_value = int(np.clip(round(intensity_value / prefactor * 100.0), 0, 1000))
         if bound_type == "min":
-            if slider_value == current_min:
-                current_min_intensity = current_min / 100.0 * prefactor
-                if intensity_value < current_min_intensity:
-                    slider_value = max(0, current_min - 1)
-                elif intensity_value > current_min_intensity:
-                    slider_value = min(999, current_min + 1)
-            if slider_value >= current_max:
-                slider_value = max(0, current_max - 1)
-            self.widget.horizontalSlider_VMin.setValue(slider_value)
+            self.widget.doubleSpinBox_CCDScaleMin.setValue(float(intensity_value))
         elif bound_type == "max":
-            if slider_value == current_max:
-                current_max_intensity = current_max / 100.0 * prefactor
-                if intensity_value < current_max_intensity:
-                    slider_value = max(1, current_max - 1)
-                elif intensity_value > current_max_intensity:
-                    slider_value = min(1000, current_max + 1)
-            if slider_value <= current_min:
-                slider_value = min(1000, current_min + 1)
-            self.widget.horizontalSlider_VMax.setValue(slider_value)
+            self.widget.doubleSpinBox_CCDScaleMax.setValue(float(intensity_value))
+
+    def _set_cake_scale_spinboxes(self, vmin, vmax):
+        if not hasattr(self.widget, "doubleSpinBox_CCDScaleMin"):
+            return
+        if vmax < vmin:
+            vmin, vmax = vmax, vmin
+        self.widget.doubleSpinBox_CCDScaleMin.blockSignals(True)
+        self.widget.doubleSpinBox_CCDScaleMax.blockSignals(True)
+        self.widget.doubleSpinBox_CCDScaleMin.setValue(float(vmin))
+        self.widget.doubleSpinBox_CCDScaleMax.setValue(float(vmax))
+        self.widget.doubleSpinBox_CCDScaleMin.blockSignals(False)
+        self.widget.doubleSpinBox_CCDScaleMax.blockSignals(False)
+
+    def _on_cake_scale_spin_changed(self, value):
+        del value
+        if not hasattr(self.widget, "doubleSpinBox_CCDScaleMin"):
+            return
+        vmin = float(self.widget.doubleSpinBox_CCDScaleMin.value())
+        vmax = float(self.widget.doubleSpinBox_CCDScaleMax.value())
+        if vmax <= vmin:
+            vmax = vmin + max(1e-6, 1e-6 * max(abs(vmin), 1.0))
+            self.widget.doubleSpinBox_CCDScaleMax.blockSignals(True)
+            self.widget.doubleSpinBox_CCDScaleMax.setValue(vmax)
+            self.widget.doubleSpinBox_CCDScaleMax.blockSignals(False)
+        self._apply_changes_to_graph()
 
     def _ignore_raw_data_missing(self):
-        return self.widget.checkBox_IgnoreRawDataExistence.isChecked()
+        return True
 
     def _set_image_file_box_missing(self):
         self.widget.textEdit_DiffractionImageFilename.setText(
@@ -388,17 +553,13 @@ class CCDController(object):
         add / remove cake
         no signal to update_graph
         """
-        if not self.widget.checkBox_ShowCake.isChecked():
-            return True
         # if no base ptn, no cake
         if not self.model.base_ptn_exist():
             QtWidgets.QMessageBox.warning(
                 self.widget, 'Warning', 'Choose a spectrum file first.')
-            self.widget.checkBox_ShowCake.setChecked(False)
             return False
         if self._is_spe_source():
             if not self.process_temp_cake():
-                self.widget.checkBox_ShowCake.setChecked(False)
                 return False
             return True
         if not self.model.associated_image_exists():
@@ -407,17 +568,14 @@ class CCDController(object):
                 QtWidgets.QMessageBox.warning(
                     self.widget, 'Warning',
                     'Cannot find CCD image file.')
-                self.widget.checkBox_ShowCake.setChecked(False)
                 return False
             if not self.process_temp_cake():
                 self._warn_cannot_process_cake()
-                self.widget.checkBox_ShowCake.setChecked(False)
                 return False
             return True
 
         if not self.process_temp_cake():
             self._warn_cannot_process_cake()
-            self.widget.checkBox_ShowCake.setChecked(False)
             return False
         return True
 
@@ -504,29 +662,19 @@ class CCDController(object):
                 return False
             return self._load_cake_from_temp_without_raw_image(temp_dir)
         #temp_dir = os.path.join(self.model.chi_path, 'temporary_pkpo')
-        if self.widget.checkBox_UseTempCake.isChecked():
-            #if os.path.exists(temp_dir):
-            success = self._load_new_image()
-            if not success:
-                return False
-            success = self.model.diff_img.read_cake_from_tempfile(
-                temp_dir=temp_dir)
-            if success:
-                print(str(datetime.datetime.now())[:-7], 
-                    ": Load cake image from temporary file.")
-                pass
-            else:
-                print(str(datetime.datetime.now())[:-7], 
-                    ": Create new temporary file for cake image.")
-                self._update_temp_cake_files(temp_dir)
-                return True
-            #else:
-                #os.makedirs(temp_dir)
-                #self._update_temp_cake_files(temp_dir)
+        success = self._load_new_image()
+        if not success:
+            return False
+        success = self.model.diff_img.read_cake_from_tempfile(
+            temp_dir=temp_dir)
+        if success:
+            print(str(datetime.datetime.now())[:-7],
+                ": Load cake image from temporary file.")
             return True
-        else:
-            self._update_temp_cake_files(temp_dir)
-            return True
+        print(str(datetime.datetime.now())[:-7],
+            ": Create new temporary file for cake image.")
+        self._update_temp_cake_files(temp_dir)
+        return True
 
     def _update_temp_cake_files(self, temp_dir):
         success = self.produce_cake()

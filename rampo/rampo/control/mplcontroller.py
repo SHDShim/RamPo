@@ -3,6 +3,11 @@ import time
 import datetime
 import numpy as np
 import numpy.ma as ma
+try:
+    from scipy.signal import medfilt, savgol_filter
+except Exception:
+    medfilt = None
+    savgol_filter = None
 from matplotlib.widgets import MultiCursor
 #from matplotlib.widgets import MultiCursor
 #import matplotlib.transforms as transforms
@@ -112,7 +117,7 @@ class MplController(object):
             self.obj_color = 'white'
 
     def get_cake_range(self):
-        if self.widget.checkBox_ShowCake.isChecked():
+        if self.model.diff_img_exist():
             return self.widget.mpl.canvas.ax_cake.get_xlim(),\
                 self.widget.mpl.canvas.ax_cake.get_ylim()
         else:
@@ -155,17 +160,24 @@ class MplController(object):
 
     def _get_data_limits(self, y_margin=0.):
         if self.widget.checkBox_BgSub.isChecked():
-            x, y = self.model.base_ptn.get_bgsub()
+            x_raw, y_raw = self.model.base_ptn.get_bgsub()
         else:
-            x, y = self.model.base_ptn.get_raw()
+            x_raw, y_raw = self.model.base_ptn.get_raw()
+        x_plot, y_plot = self._get_smoothed_pattern_xy(x_raw, y_raw)
         if self.diff_ctrl is not None:
             try:
-                x, y = self.diff_ctrl.get_display_pattern(x, y)
+                x_plot, y_plot = self.diff_ctrl.get_display_pattern(x_plot, y_plot)
+                __, y_raw = self.diff_ctrl.get_display_pattern(x_raw, y_raw)
             except Exception:
                 pass
-        return (x.min(), x.max(),
-                y.min() - (y.max() - y.min()) * y_margin,
-                y.max() + (y.max() - y.min()) * y_margin)
+        y_min = float(np.min(y_raw))
+        y_max = float(np.max(y_raw))
+        y_span = y_max - y_min
+        if y_span == 0:
+            y_span = max(abs(y_max), 1.0) * 1.0e-6
+        return (x_plot.min(), x_plot.max(),
+                y_min - y_span * y_margin,
+                y_max + y_span * y_margin)
 
     def _get_cake_y_limits(self):
         if self.model.diff_img_exist():
@@ -176,6 +188,110 @@ class MplController(object):
             if chi_cake is not None and len(chi_cake) > 0:
                 return (float(np.min(chi_cake)), float(np.max(chi_cake)))
         return None
+
+    def _get_smoothing_settings(self):
+        despike = int(self.widget.spinBox_SpectrumDespike.value()) \
+            if hasattr(self.widget, "spinBox_SpectrumDespike") else 0
+        sg_window = int(self.widget.spinBox_SpectrumSGWindow.value()) \
+            if hasattr(self.widget, "spinBox_SpectrumSGWindow") else 0
+        sg_poly = int(self.widget.spinBox_SpectrumSGPoly.value()) \
+            if hasattr(self.widget, "spinBox_SpectrumSGPoly") else 3
+        if despike > 0 and despike % 2 == 0:
+            despike += 1
+        if sg_window > 0 and sg_window % 2 == 0:
+            sg_window += 1
+        if sg_window <= 1:
+            sg_window = 0
+        sg_poly = max(0, sg_poly)
+        if sg_window > 0:
+            sg_poly = min(sg_poly, sg_window - 1)
+        return {
+            "despike_kernel": despike,
+            "sg_window": sg_window,
+            "sg_polyorder": sg_poly,
+        }
+
+    def _smoothing_active(self):
+        settings = self._get_smoothing_settings()
+        return (settings["despike_kernel"] > 1) or (settings["sg_window"] > 1)
+
+    def _smooth_xy(self, x, y):
+        settings = self._get_smoothing_settings()
+        if settings["despike_kernel"] <= 1 and settings["sg_window"] <= 1:
+            return x, y
+        if (medfilt is None) or (savgol_filter is None):
+            return x, y
+        x_arr = np.asarray(x, dtype=float)
+        y_arr = np.asarray(y, dtype=float)
+        if x_arr.ndim != 1 or y_arr.ndim != 1:
+            return x, y
+        n = min(x_arr.size, y_arr.size)
+        if n == 0:
+            return x_arr[:0], y_arr[:0]
+        x_arr = x_arr[:n]
+        y_arr = y_arr[:n]
+        y_smooth = np.asarray(y_arr, dtype=float)
+        despike = int(settings["despike_kernel"])
+        if despike > 1 and despike <= n:
+            y_smooth = medfilt(y_smooth, kernel_size=despike)
+        sg_window = int(settings["sg_window"])
+        sg_poly = int(settings["sg_polyorder"])
+        if sg_window > 1 and sg_window <= n and sg_poly < sg_window:
+            y_smooth = savgol_filter(
+                y_smooth,
+                window_length=sg_window,
+                polyorder=sg_poly,
+            )
+        return x_arr, np.asarray(y_smooth, dtype=float)
+
+    def _get_smoothed_pattern_xy(self, x, y):
+        if y is None:
+            return x, y
+        return self._smooth_xy(x, y)
+
+    def _smooth_cake_x(self, intensity, x):
+        settings = self._get_smoothing_settings()
+        if settings["despike_kernel"] <= 1 and settings["sg_window"] <= 1:
+            return intensity, x
+        if (medfilt is None) or (savgol_filter is None):
+            return intensity, x
+        if intensity is None or x is None:
+            return intensity, x
+        x_arr = np.asarray(x, dtype=float).reshape(-1)
+        if x_arr.size == 0:
+            return intensity, x_arr
+        is_masked = ma.isMaskedArray(intensity)
+        data_arr = ma.asarray(intensity, dtype=float)
+        if data_arr.ndim != 2:
+            return intensity, x
+        n_cols = min(data_arr.shape[1], x_arr.size)
+        if n_cols == 0:
+            return intensity, x_arr[:n_cols]
+        data_arr = data_arr[:, :n_cols]
+        x_arr = x_arr[:n_cols]
+        smooth = np.asarray(ma.filled(data_arr, np.nan), dtype=float)
+        despike = int(settings["despike_kernel"])
+        if despike > 1 and despike <= n_cols:
+            smooth = np.apply_along_axis(
+                lambda row: medfilt(np.nan_to_num(row, nan=0.0), kernel_size=despike),
+                1,
+                smooth,
+            )
+        sg_window = int(settings["sg_window"])
+        sg_poly = int(settings["sg_polyorder"])
+        if sg_window > 1 and sg_window <= n_cols and sg_poly < sg_window:
+            smooth = np.apply_along_axis(
+                lambda row: savgol_filter(
+                    np.nan_to_num(row, nan=0.0),
+                    window_length=sg_window,
+                    polyorder=sg_poly,
+                ),
+                1,
+                smooth,
+            )
+        if is_masked:
+            smooth = ma.masked_where(ma.getmaskarray(data_arr), smooth, copy=False)
+        return smooth, x_arr
 
 
     
@@ -255,27 +371,34 @@ class MplController(object):
             except Exception:
                 diff_mode = False
 
+        int_plot, tth_cake = self._smooth_cake_x(int_plot, tth_cake)
+        if (int_plot is None) or (tth_cake is None) or (chi_cake is None):
+            return
+        if np.size(int_plot) == 0 or np.size(tth_cake) == 0 or np.size(chi_cake) == 0:
+            return
+
         # Apply azimuthal shift after diff subtraction so the same shift is
         # effectively applied to both current and reference cake images.
-        mid_angle = self.widget.spinBox_AziShift.value()
-        n_rows = 0 if int_plot is None else int_plot.shape[0]
-        if (mid_angle != 0) and (n_rows > 0):
-            shift = int(mid_angle) % n_rows
-            if shift != 0:
-                int_plot = np.roll(int_plot, shift=shift, axis=0)
-
         # Get image contrast parameters from UI unless diff mode overrides.
-        min_slider_pos = self.widget.horizontalSlider_VMin.value()
-        max_slider_pos = self.widget.horizontalSlider_VMax.value()
-        if (max_slider_pos <= min_slider_pos):
-            self.widget.horizontalSlider_VMin.setValue(1)
-            self.widget.horizontalSlider_VMax.setValue(99)
-        prefactor = self.widget.spinBox_MaxCakeScale.value() / \
-            (10. ** self.widget.horizontalSlider_MaxScaleBars.value())
-        climits = np.asarray([
-            self.widget.horizontalSlider_VMin.value(),
-            self.widget.horizontalSlider_VMax.value()]) / \
-            100. * prefactor
+        if hasattr(self.widget, "doubleSpinBox_CCDScaleMin"):
+            vmin = float(self.widget.doubleSpinBox_CCDScaleMin.value())
+            vmax = float(self.widget.doubleSpinBox_CCDScaleMax.value())
+            if vmax <= vmin:
+                vmax = vmin + max(1e-6, 1e-6 * max(abs(vmin), 1.0))
+                self.widget.doubleSpinBox_CCDScaleMax.setValue(vmax)
+            climits = np.asarray([vmin, vmax], dtype=float)
+        else:
+            min_slider_pos = self.widget.horizontalSlider_VMin.value()
+            max_slider_pos = self.widget.horizontalSlider_VMax.value()
+            if (max_slider_pos <= min_slider_pos):
+                self.widget.horizontalSlider_VMin.setValue(1)
+                self.widget.horizontalSlider_VMax.setValue(99)
+            prefactor = self.widget.spinBox_MaxCakeScale.value() / \
+                (10. ** self.widget.horizontalSlider_MaxScaleBars.value())
+            climits = np.asarray([
+                self.widget.horizontalSlider_VMin.value(),
+                self.widget.horizontalSlider_VMax.value()]) / \
+                100. * prefactor
 
         # Check if ApplyMask is on
         # If so, get mask range from UI and set mask, then process cake for new mask.  Note that if mask from UI is for entire range of data, do not re-integrate.
@@ -484,7 +607,7 @@ class MplController(object):
                                 self.widget.comboBox_HKLFontSize.currentText()),
                             alpha=self.widget.doubleSpinBox_JCPDS_ptn_Alpha.value())
                 # phase.name, phase.v.item()))
-            if self.widget.checkBox_ShowCake.isChecked() and \
+            if self.model.diff_img_exist() and \
                     self.widget.checkBox_JCPDSinCake.isChecked():
                 self.widget.mpl.canvas.ax_cake.vlines(
                     tth, np.ones_like(tth) * cakerange[2],
@@ -597,18 +720,30 @@ class MplController(object):
 
     def _plot_diffpattern(self, gsas_style=False):
         if self.widget.checkBox_BgSub.isChecked():
-            x, y = self.model.base_ptn.get_bgsub()
+            x_raw, y_raw = self.model.base_ptn.get_bgsub()
         else:
-            x, y = self.model.base_ptn.get_raw()
+            x_raw, y_raw = self.model.base_ptn.get_raw()
+        x, y = x_raw, y_raw
+        x_s, y_s = self._get_smoothed_pattern_xy(x_raw, y_raw)
         if self.diff_ctrl is not None:
             try:
                 x, y = self.diff_ctrl.get_display_pattern(x, y)
+                x_s, y_s = self.diff_ctrl.get_display_pattern(x_s, y_s)
             except Exception:
                 pass
         if gsas_style:
             self.widget.mpl.canvas.ax_pattern.plot(
                 x, y, c=self.model.base_ptn.color, marker='o',
                 linestyle='None', ms=3)
+        elif self._smoothing_active():
+            self.widget.mpl.canvas.ax_pattern.plot(
+                x, y, c=self.model.base_ptn.color,
+                marker='.', linestyle='None', ms=3, alpha=0.5)
+            self.widget.mpl.canvas.ax_pattern.plot(
+                x_s, y_s, c=self.model.base_ptn.color,
+                lw=float(
+                    self.widget.comboBox_BasePtnLineThickness.
+                    currentText()))
         else:
             self.widget.mpl.canvas.ax_pattern.plot(
                 x, y, c=self.model.base_ptn.color,
@@ -619,8 +754,11 @@ class MplController(object):
             self.widget.mpl.canvas.ax_pattern.axhline(
                 0.0, ls='--', c='tab:red', lw=0.8)
             return
-        if not self.widget.checkBox_BgSub.isChecked():
+        if (not self.widget.checkBox_BgSub.isChecked()) and \
+                hasattr(self.widget, "checkBox_ShowBg") and \
+                self.widget.checkBox_ShowBg.isChecked():
             x_bg, y_bg = self.model.base_ptn.get_background()
+            x_bg, y_bg = self._get_smoothed_pattern_xy(x_bg, y_bg)
             self.widget.mpl.canvas.ax_pattern.plot(
                 x_bg, y_bg, c=self.model.base_ptn.color, ls='--',
                 lw=float(
@@ -694,6 +832,31 @@ class MplController(object):
                     y_shift, residue + y_shift, facecolor='r')
             i += 1
 
+    def _plot_background_fit_areas(self):
+        table = getattr(self.widget, "tableWidget_BackgroundConstraints", None)
+        if table is None:
+            return
+        for row in range(table.rowCount()):
+            item_min = table.item(row, 0)
+            item_max = table.item(row, 1)
+            if item_min is None or item_max is None:
+                continue
+            try:
+                xmin = float(item_min.text())
+                xmax = float(item_max.text())
+            except Exception:
+                continue
+            if xmax < xmin:
+                xmin, xmax = xmax, xmin
+            self.widget.mpl.canvas.ax_pattern.axvspan(
+                xmin, xmax,
+                ymin=0.0, ymax=1.0,
+                facecolor="#00c853",
+                edgecolor="#00c853",
+                alpha=0.10,
+                linewidth=1.0,
+            )
+
     def _fits_tab_active(self):
         """
         Determine if the Fits tab is currently active.
@@ -753,8 +916,7 @@ class MplController(object):
                     c_limits = self.widget.mpl.canvas.ax_cake.axis()
                     cake_ylimits = c_limits[2:4]
             
-            if self.widget.checkBox_ShowCake.isChecked() and \
-                    self.model.diff_img_exist():
+            if self.model.diff_img_exist():
                 new_height = self.widget.horizontalSlider_CakeAxisSize.value()
                 self.widget.mpl.canvas.resize_axes(new_height)
                 self._plot_cake()
@@ -798,6 +960,7 @@ class MplController(object):
                     title, color=self.obj_color, fontsize=title_font_size)
                 
                 self._plot_diffpattern(gsas_style)
+                self._plot_background_fit_areas()
                 
                 if self.model.waterfall_exist():
                     self._plot_waterfallpatterns()
@@ -826,9 +989,8 @@ class MplController(object):
                         new_low_limit, limits[3])
             
             if self.widget.checkBox_ShowLargePnT.isChecked():
-                label_p_t = "{0: 5.1f} GPa\n{1: 4.0f} K".\
-                    format(self.widget.doubleSpinBox_Pressure.value(),
-                        self.widget.doubleSpinBox_Temperature.value())
+                label_p_t = "{0: 5.1f} GPa".format(
+                    self.widget.doubleSpinBox_Pressure.value())
                 self.widget.mpl.canvas.ax_pattern.text(
                     0.01, 0.98, label_p_t, horizontalalignment='left',
                     verticalalignment='top',
@@ -837,7 +999,7 @@ class MplController(object):
                         self.widget.comboBox_PnTFontSize.currentText()))
             
             if self._is_spe_mode():
-                self.widget.mpl.canvas.ax_pattern.set_xlabel("Raman Shift (cm-1)")
+                self.widget.mpl.canvas.ax_pattern.set_xlabel(r"Raman Shift (cm$^{-1}$)")
                 self.widget.mpl.canvas.ax_pattern.format_coord = \
                     lambda x, y: "\n Shift={0:.3f} cm-1, I={1:.4e}".format(x, y)
                 if hasattr(self.widget.mpl.canvas, 'ax_cake'):
@@ -869,7 +1031,7 @@ class MplController(object):
             if self.widget.checkBox_LongCursor.isChecked():
                 # Determine which axes to use
                 if hasattr(self.widget.mpl.canvas, 'ax_cake') and \
-                   self.widget.checkBox_ShowCake.isChecked():
+                   self.model.diff_img_exist():
                     # Use both axes
                     axes_list = (self.widget.mpl.canvas.ax_pattern,
                                 self.widget.mpl.canvas.ax_cake)

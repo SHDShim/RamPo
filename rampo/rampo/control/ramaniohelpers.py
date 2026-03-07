@@ -28,7 +28,7 @@ def load_bgsub_or_raw_xy(spectrum_path, use_bgsub, spectrum_cache):
     if not bool(use_bgsub):
         return load_spectrum_xy(spectrum_path, spectrum_cache)
 
-    # Priority 1: temp bgsub file under <chi>-param/
+    # Priority 1: temp bgsub file under <data>-rampo/
     try:
         temp_dir = get_temp_dir(spectrum_path)
         base = os.path.splitext(os.path.basename(spectrum_path))[0]

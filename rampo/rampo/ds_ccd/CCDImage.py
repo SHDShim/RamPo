@@ -17,6 +17,7 @@ class CCDImage(object):
     def __init__(self):
         self.img_filename = None
         self.img = None
+        self.x_wavelength_raw = None
         # mask for self.img, not self.intensity_cake (cake image)
         self.mask = None 
         # self.intensity is for intersity of 1D pattern
@@ -29,6 +30,7 @@ class CCDImage(object):
 
     def _set_direct_image_axes(self, x_axis=None):
         if self.img is None:
+            self.x_wavelength_raw = None
             self.tth = None
             self.intensity = None
             self.tth_cake = None
@@ -37,8 +39,10 @@ class CCDImage(object):
             return
         if x_axis is None:
             x_axis = np.arange(self.img.shape[1], dtype=float)
+            self.x_wavelength_raw = None
         else:
             x_axis = np.asarray(x_axis, dtype=float)
+            self.x_wavelength_raw = np.asarray(x_axis, dtype=float)
         y_axis = np.arange(self.img.shape[0], dtype=float)
         self.tth_cake = x_axis
         self.chi_cake = y_axis
@@ -49,6 +53,7 @@ class CCDImage(object):
     def load(self, img_filename):
         self.img_filename = img_filename
         ext = extract_extension(self.img_filename).lower()
+        self.x_wavelength_raw = None
         if ext == 'spe':
             spe = SpeFile(self.img_filename)
             data = spe.img[0] if isinstance(spe.img, list) else spe.img
@@ -73,7 +78,19 @@ class CCDImage(object):
         self.img = np.array(data)[::-1]
         self._set_direct_image_axes()
         print(str(datetime.datetime.now())[:-7], 
-                ": Load ", self.img_filename)
+            ": Load ", self.img_filename)
+
+    def apply_excitation_wavelength(self, laser_wavelength_nm):
+        if self.x_wavelength_raw is None:
+            return False
+        laser = float(laser_wavelength_nm)
+        x_nm = np.asarray(self.x_wavelength_raw, dtype=float)
+        x_shift = np.full_like(x_nm, np.nan, dtype=float)
+        valid = np.isfinite(x_nm) & (x_nm > 0.0) & np.isfinite(laser) & (laser > 0.0)
+        x_shift[valid] = 1.0e7 / laser - 1.0e7 / x_nm[valid]
+        self.tth = np.asarray(x_shift, dtype=float)
+        self.tth_cake = np.asarray(x_shift, dtype=float)
+        return True
 
     def histogram(self):
         import matplotlib.pyplot as plt

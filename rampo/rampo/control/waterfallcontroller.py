@@ -5,7 +5,7 @@ from qtpy import QtCore
 from qtpy import QtGui
 from .mplcontroller import MplController
 from .waterfalltablecontroller import WaterfallTableController
-from ..utils import convert_wl_to_energy, get_directory, get_temp_dir
+from ..utils import get_directory, get_temp_dir
 
 
 class WaterfallController(object):
@@ -85,8 +85,7 @@ class WaterfallController(object):
                 str(self.model.get_base_ptn_filename()))
             self.widget.doubleSpinBox_SetWavelength.setValue(
                 self.model.get_base_ptn_wavelength())
-            xray_energy = convert_wl_to_energy(self.model.get_base_ptn_wavelength())
-            self.widget.label_XRayEnergy.setText("({:.3f} keV)".format(xray_energy))
+            self.widget.label_XRayEnergy.setText("nm")
 
         if callable(self.apply_nav_state_cb) and (nav_state is not None):
             self.apply_nav_state_cb(nav_state)
@@ -159,13 +158,8 @@ class WaterfallController(object):
                 wavelength = self.widget.doubleSpinBox_SetWavelength.value()
                 bg_roi = [self.widget.doubleSpinBox_Background_ROI_min.value(),
                           self.widget.doubleSpinBox_Background_ROI_max.value()]
-                bg_params = [self.widget.spinBox_BGParam0.value(),
-                             self.widget.spinBox_BGParam1.value(),
-                             self.widget.spinBox_BGParam2.value()]
-                if self.widget.checkBox_UseTempBGSub.isChecked():
-                    temp_dir = get_temp_dir(self.model.get_base_ptn_filename())
-                else:
-                    temp_dir = None
+                bg_params = [self.widget.spinBox_BGParam1.value()]
+                temp_dir = get_temp_dir(self.model.get_base_ptn_filename())
                 self.model.append_a_waterfall_ptn(
                     filename, wavelength, bg_roi, bg_params, temp_dir=temp_dir)
             self.waterfall_table_ctrl.update()
@@ -185,14 +179,8 @@ class WaterfallController(object):
         wavelength = self.widget.doubleSpinBox_SetWavelength.value()
         bg_roi = [self.widget.doubleSpinBox_Background_ROI_min.value(),
                   self.widget.doubleSpinBox_Background_ROI_max.value()]
-        bg_params = [self.widget.spinBox_BGParam0.value(),
-                     self.widget.spinBox_BGParam1.value(),
-                     self.widget.spinBox_BGParam2.value()]
-        if self.widget.checkBox_UseTempBGSub.isChecked():
-            temp_dir = get_temp_dir(self.model.get_base_ptn_filename())
-            #temp_dir = os.path.join(self.model.chi_path, 'temporary_pkpo')
-        else:
-            temp_dir = None
+        bg_params = [self.widget.spinBox_BGParam1.value()]
+        temp_dir = get_temp_dir(self.model.get_base_ptn_filename())
         self.model.append_a_waterfall_ptn(
             filename, wavelength, bg_roi, bg_params, temp_dir=temp_dir)
         self.waterfall_table_ctrl.update()

@@ -30,6 +30,7 @@ class SessionController(object):
             "jcpds": False,
             "pressure": False,
             "temperature": False,
+            "spectrum_smoothing": False,
             "cake_z_scale": False,
             "ccd_roi": False,
             "background": False,
@@ -49,7 +50,7 @@ class SessionController(object):
         if hasattr(self.widget, "pushButton_SaveDPP"):
             self.widget.pushButton_SaveDPP.clicked.connect(self.save_dpp)
         if hasattr(self.widget, "pushButton_LoadDPP"):
-            self.widget.pushButton_LoadDPP.clicked.connect(self.load_dpp)
+            self.widget.pushButton_LoadDPP.clicked.connect(self.save_dpp)
         if hasattr(self.widget, "pushButton_OpenBackupInfo"):
             self.widget.pushButton_OpenBackupInfo.clicked.connect(
                 self.open_backup_info)
@@ -299,14 +300,24 @@ class SessionController(object):
             self.widget, "Backup Restored", msg)
 
     def _collect_ui_state(self):
+        smoothing = {
+            "active": bool(self.plot_ctrl._smoothing_active()),
+            "despike_kernel": int(self.widget.spinBox_SpectrumDespike.value())
+            if hasattr(self.widget, "spinBox_SpectrumDespike") else 0,
+            "sg_window": int(self.widget.spinBox_SpectrumSGWindow.value())
+            if hasattr(self.widget, "spinBox_SpectrumSGWindow") else 0,
+            "sg_polyorder": int(self.widget.spinBox_SpectrumSGPoly.value())
+            if hasattr(self.widget, "spinBox_SpectrumSGPoly") else 3,
+            "raw_file": (
+                os.path.splitext(os.path.basename(self.model.base_ptn.fname))[0] + ".chi"
+            ) if self.model.base_ptn_exist() else None,
+            "smooth_file": "smooth.chi",
+        }
         cake_hist = {}
         if hasattr(self.widget, "cake_hist_widget"):
             hist = self.widget.cake_hist_widget
             cake_hist = {
                 "log_y": bool(hist.check_log.isChecked()),
-                "focus_range": bool(hist.check_focus.isChecked()),
-                "low_pct": float(hist.spin_low_pct.value()),
-                "high_pct": float(hist.spin_high_pct.value()),
             }
         return {
             "pt_controls": {
@@ -317,16 +328,15 @@ class SessionController(object):
             "background": {
                 "roi_min": float(self.widget.doubleSpinBox_Background_ROI_min.value()),
                 "roi_max": float(self.widget.doubleSpinBox_Background_ROI_max.value()),
-                "n_points": int(self.widget.spinBox_BGParam0.value()),
-                "n_order": int(self.widget.spinBox_BGParam1.value()),
-                "n_iteration": int(self.widget.spinBox_BGParam2.value()),
+                "poly_order": int(self.widget.spinBox_BGParam1.value()),
+                "areas": self._collect_background_areas(),
             },
+            "spectrum": smoothing,
             "cake": {
-                "azi_shift": self.widget.spinBox_AziShift.value(),
-                "int_max": self.widget.spinBox_MaxCakeScale.value(),
-                "min_bar": self.widget.horizontalSlider_VMin.value(),
-                "max_bar": self.widget.horizontalSlider_VMax.value(),
-                "scale_bar": self.widget.horizontalSlider_MaxScaleBars.value(),
+                "vmin": float(self.widget.doubleSpinBox_CCDScaleMin.value())
+                if hasattr(self.widget, "doubleSpinBox_CCDScaleMin") else 0.0,
+                "vmax": float(self.widget.doubleSpinBox_CCDScaleMax.value())
+                if hasattr(self.widget, "doubleSpinBox_CCDScaleMax") else 1.0,
                 "mask_min": self.widget.spinBox_MaskMin.value(),
                 "mask_max": self.widget.spinBox_MaskMax.value(),
                 "hist": cake_hist,
@@ -371,24 +381,25 @@ class SessionController(object):
                 self.widget.doubleSpinBox_Background_ROI_min.setValue(float(bg["roi_min"]))
             if "roi_max" in bg:
                 self.widget.doubleSpinBox_Background_ROI_max.setValue(float(bg["roi_max"]))
-            if "n_points" in bg:
-                self.widget.spinBox_BGParam0.setValue(int(bg["n_points"]))
-            if "n_order" in bg:
-                self.widget.spinBox_BGParam1.setValue(int(bg["n_order"]))
-            if "n_iteration" in bg:
-                self.widget.spinBox_BGParam2.setValue(int(bg["n_iteration"]))
+            self.widget.spinBox_BGParam1.setValue(int(bg.get("poly_order", 3)))
+            self._apply_background_areas(bg.get("areas", []))
+        spectrum = (ui_state or {}).get("spectrum", {})
+        if spectrum != {}:
+            if hasattr(self.widget, "spinBox_SpectrumDespike"):
+                self.widget.spinBox_SpectrumDespike.setValue(
+                    int(spectrum.get("despike_kernel", 0)))
+            if hasattr(self.widget, "spinBox_SpectrumSGWindow"):
+                self.widget.spinBox_SpectrumSGWindow.setValue(
+                    int(spectrum.get("sg_window", 0)))
+            if hasattr(self.widget, "spinBox_SpectrumSGPoly"):
+                self.widget.spinBox_SpectrumSGPoly.setValue(
+                    int(spectrum.get("sg_polyorder", 3)))
         cake = (ui_state or {}).get("cake", {})
         if cake != {}:
-            if "azi_shift" in cake:
-                self.widget.spinBox_AziShift.setValue(int(cake["azi_shift"]))
-            if "int_max" in cake:
-                self.widget.spinBox_MaxCakeScale.setValue(int(cake["int_max"]))
-            if "min_bar" in cake:
-                self.widget.horizontalSlider_VMin.setValue(int(cake["min_bar"]))
-            if "max_bar" in cake:
-                self.widget.horizontalSlider_VMax.setValue(int(cake["max_bar"]))
-            if "scale_bar" in cake:
-                self.widget.horizontalSlider_MaxScaleBars.setValue(int(cake["scale_bar"]))
+            if "vmin" in cake and hasattr(self.widget, "doubleSpinBox_CCDScaleMin"):
+                self.widget.doubleSpinBox_CCDScaleMin.setValue(float(cake["vmin"]))
+            if "vmax" in cake and hasattr(self.widget, "doubleSpinBox_CCDScaleMax"):
+                self.widget.doubleSpinBox_CCDScaleMax.setValue(float(cake["vmax"]))
             if "mask_min" in cake:
                 self.widget.spinBox_MaskMin.setValue(int(cake["mask_min"]))
             if "mask_max" in cake:
@@ -397,12 +408,6 @@ class SessionController(object):
             if hasattr(self.widget, "cake_hist_widget") and hist != {}:
                 if "log_y" in hist:
                     self.widget.cake_hist_widget.check_log.setChecked(bool(hist["log_y"]))
-                if "focus_range" in hist:
-                    self.widget.cake_hist_widget.check_focus.setChecked(bool(hist["focus_range"]))
-                if "low_pct" in hist:
-                    self.widget.cake_hist_widget.spin_low_pct.setValue(float(hist["low_pct"]))
-                if "high_pct" in hist:
-                    self.widget.cake_hist_widget.spin_high_pct.setValue(float(hist["high_pct"]))
         ccd_roi = (ui_state or {}).get("ccd_roi", {})
         if ccd_roi != {} and hasattr(self.widget, "spinBox_CCDRowMin") and \
                 hasattr(self.widget, "spinBox_CCDRowMax"):
@@ -460,8 +465,7 @@ class SessionController(object):
                     str(self.model.base_ptn.fname))
                 self.widget.doubleSpinBox_SetWavelength.setValue(
                     self.model.get_base_ptn_wavelength())
-                xray_energy = convert_wl_to_energy(self.model.get_base_ptn_wavelength())
-                self.widget.label_XRayEnergy.setText("({:.3f} keV)".format(xray_energy))
+                self.widget.label_XRayEnergy.setText("nm")
                 if self.model.exist_in_waterfall(self.model.base_ptn.fname):
                     self.widget.pushButton_AddBasePtn.setChecked(True)
                 else:
@@ -503,14 +507,9 @@ class SessionController(object):
             "doubleSpinBox_Temperature",
             "doubleSpinBox_Background_ROI_min",
             "doubleSpinBox_Background_ROI_max",
-            "spinBox_BGParam0",
             "spinBox_BGParam1",
-            "spinBox_BGParam2",
-            "spinBox_AziShift",
-            "spinBox_MaxCakeScale",
-            "horizontalSlider_VMin",
-            "horizontalSlider_VMax",
-            "horizontalSlider_MaxScaleBars",
+            "doubleSpinBox_CCDScaleMin",
+            "doubleSpinBox_CCDScaleMax",
             "spinBox_MaskMin",
             "spinBox_MaskMax",
             "checkBox_Diff",
@@ -526,7 +525,7 @@ class SessionController(object):
                 widgets.append(getattr(self.widget, name))
         if hasattr(self.widget, "cake_hist_widget"):
             hist = self.widget.cake_hist_widget
-            for name in ("check_log", "check_focus", "spin_low_pct", "spin_high_pct"):
+            for name in ("check_log",):
                 if hasattr(hist, name):
                     widgets.append(getattr(hist, name))
         return widgets
@@ -545,23 +544,64 @@ class SessionController(object):
                 return
 
     def _infer_base_chi_from_manifest(self, manifest_file):
-        param_dir = os.path.dirname(manifest_file)
+        candidate_dir = os.path.dirname(manifest_file)
+        basename = os.path.basename(candidate_dir)
+        if basename.isdigit():
+            param_dir = os.path.dirname(candidate_dir)
+        else:
+            param_dir = candidate_dir
         basename = os.path.basename(param_dir)
-        if not basename.endswith("-param"):
+        if not basename.endswith("-rampo"):
             return None
+        session_file = None
+        if os.path.isdir(candidate_dir):
+            candidate_session = os.path.join(candidate_dir, "rampo_session.json")
+            if os.path.exists(candidate_session):
+                session_file = candidate_session
+        if session_file is None:
+            for entry in sorted(os.scandir(param_dir), key=lambda e: e.name, reverse=True):
+                if not entry.is_dir():
+                    continue
+                candidate_session = os.path.join(entry.path, "rampo_session.json")
+                if os.path.exists(candidate_session):
+                    session_file = candidate_session
+                    break
+        if session_file is not None and os.path.exists(session_file):
+            try:
+                with open(session_file, "r", encoding="utf-8") as f:
+                    session_data = json.load(f)
+                base_payload = (session_data or {}).get("base_pattern", {})
+                stored = base_payload.get("fname")
+                if stored:
+                    candidate = stored if os.path.isabs(stored) else os.path.normpath(
+                        os.path.join(os.path.dirname(param_dir), stored))
+                    if os.path.exists(candidate):
+                        return candidate
+            except Exception:
+                pass
         base_no_ext = basename[:-6]
-        candidate = os.path.join(os.path.dirname(param_dir), base_no_ext + ".chi")
-        if os.path.exists(candidate):
-            return candidate
+        for ext in (".spe", ".SPE", ".chi", ".CHI"):
+            candidate = os.path.join(os.path.dirname(param_dir), base_no_ext + ext)
+            if os.path.exists(candidate):
+                return candidate
         return None
 
     def _load_new_param_session(self, selected_file):
         ext = os.path.splitext(selected_file)[1].lower()
-        if ext == ".chi":
+        selected_dir = os.path.dirname(selected_file)
+        if ext == ".chi" and os.path.basename(selected_dir).endswith("-rampo"):
+            base_chi = self._infer_base_chi_from_manifest(selected_file)
+            param_dir = selected_dir
+            if base_chi is None:
+                QtWidgets.QMessageBox.warning(
+                    self.widget, "Warning",
+                    "Cannot infer original spectrum from the selected Rampo folder file.")
+                return False
+        elif ext == ".chi":
             base_chi = selected_file
             param_dir = os.path.join(
                 os.path.dirname(base_chi),
-                os.path.splitext(os.path.basename(base_chi))[0] + "-param",
+                os.path.splitext(os.path.basename(base_chi))[0] + "-rampo",
             )
         else:
             base_chi = self._infer_base_chi_from_manifest(selected_file)
@@ -646,7 +686,7 @@ class SessionController(object):
         """
         param_dir = os.path.join(
             os.path.dirname(base_chi_file),
-            os.path.splitext(os.path.basename(base_chi_file))[0] + "-param",
+            os.path.splitext(os.path.basename(base_chi_file))[0] + "-rampo",
         )
         if not is_new_param_folder(param_dir):
             self._last_param_category_presence = {
@@ -654,6 +694,7 @@ class SessionController(object):
                 "jcpds": False,
                 "pressure": False,
                 "temperature": False,
+                "spectrum_smoothing": False,
                 "cake_z_scale": False,
                 "ccd_roi": False,
                 "background": False,
@@ -670,6 +711,7 @@ class SessionController(object):
                 "jcpds": False,
                 "pressure": False,
                 "temperature": False,
+                "spectrum_smoothing": False,
                 "cake_z_scale": False,
                 "ccd_roi": False,
                 "background": False,
@@ -682,6 +724,7 @@ class SessionController(object):
             "jcpds": False,
             "pressure": False,
             "temperature": False,
+            "spectrum_smoothing": False,
             "cake_z_scale": False,
             "ccd_roi": False,
             "background": False,
@@ -743,15 +786,17 @@ class SessionController(object):
         filen = make_filename(self.model.base_ptn.fname, ext,
                               temp_dir=temp_dir)
         if os.path.exists(filen):
-            temp_values = []
+            temp_values = {}
             with open(filen, "r") as f:
                 for line in f:
-                    temp_values.append(int(line.split(':')[1]))
-            self.widget.spinBox_AziShift.setValue(temp_values[0])
-            self.widget.spinBox_MaxCakeScale.setValue(temp_values[1])
-            self.widget.horizontalSlider_VMin.setValue(temp_values[2])
-            self.widget.horizontalSlider_VMax.setValue(temp_values[3])
-            self.widget.horizontalSlider_MaxScaleBars.setValue(temp_values[4])
+                    if ':' not in line:
+                        continue
+                    key, value = line.split(':', 1)
+                    temp_values[key.strip()] = value.strip()
+            if "vmin" in temp_values and hasattr(self.widget, "doubleSpinBox_CCDScaleMin"):
+                self.widget.doubleSpinBox_CCDScaleMin.setValue(float(temp_values["vmin"]))
+            if "vmax" in temp_values and hasattr(self.widget, "doubleSpinBox_CCDScaleMax"):
+                self.widget.doubleSpinBox_CCDScaleMax.setValue(float(temp_values["vmax"]))
 
     def _save_cake_format_file(self):
         # make filename
@@ -761,12 +806,13 @@ class SessionController(object):
         filen = make_filename(self.model.base_ptn.fname, ext,
                               temp_dir=temp_dir)
         # save cake related Values
-        names = ['azi_shift', 'int_max', 'min_bar', 'max_bar', 'scale_bar']
-        values = [self.widget.spinBox_AziShift.value(),
-                  self.widget.spinBox_MaxCakeScale.value(),
-                  self.widget.horizontalSlider_VMin.value(),
-                  self.widget.horizontalSlider_VMax.value(),
-                  self.widget.horizontalSlider_MaxScaleBars.value()]
+        names = ['vmin', 'vmax']
+        values = [
+            self.widget.doubleSpinBox_CCDScaleMin.value()
+            if hasattr(self.widget, "doubleSpinBox_CCDScaleMin") else 0.0,
+            self.widget.doubleSpinBox_CCDScaleMax.value()
+            if hasattr(self.widget, "doubleSpinBox_CCDScaleMax") else 1.0,
+        ]
 
         with open(filen, "w") as f:
             for n, v in zip(names, values):
@@ -803,8 +849,7 @@ class SessionController(object):
                 self.widget.pushButton_AddBasePtn.setChecked(True)
             else:
                 self.widget.pushButton_AddBasePtn.setChecked(False)
-            if self.widget.checkBox_ShowCake.isChecked():
-                self._load_cake_format_file()
+            self._load_cake_format_file()
             self.plot_ctrl.zoom_out_graph()
             self.update_inputs()
         else:
@@ -841,12 +886,19 @@ class SessionController(object):
             QtWidgets.QMessageBox.warning(
                 self.widget, "Warning", "Open a spectrum first.")
             return
-        if self.widget.checkBox_ShowCake.isChecked() and \
-                self.model.associated_image_exists():
+        diff_img = getattr(self.model, "diff_img", None)
+        if (diff_img is not None) and (getattr(diff_img, "img", None) is not None):
             self.ccdprocess_ctrl.cook()
             self.model.diff_img.write_temp_cakefiles(
                 temp_dir=get_temp_dir(self.model.get_base_ptn_filename()))
+        elif (diff_img is not None) and \
+                (getattr(diff_img, "tth_cake", None) is not None) and \
+                (getattr(diff_img, "chi_cake", None) is not None) and \
+                (getattr(diff_img, "intensity_cake", None) is not None):
+            self.model.diff_img.write_temp_cakefiles(
+                temp_dir=get_temp_dir(self.model.get_base_ptn_filename()))
         self._commit_inputs_before_save()
+        self._write_smoothed_spectrum_file()
         try:
             result = save_model_to_param(
                 self.model,
@@ -863,8 +915,7 @@ class SessionController(object):
         print(str(datetime.datetime.now())[:-7],
               ": Save session:", result.manifest_path)
         self.refresh_backup_table()
-        if self.widget.checkBox_ShowCake.isChecked():
-            self._save_cake_format_file()
+        self._save_cake_format_file()
         try:
             env = os.environ['CONDA_DEFAULT_ENV']
         except Exception:
@@ -879,6 +930,47 @@ class SessionController(object):
         self.widget.tableWidget_PkFtSections.setStyleSheet(
             "Background-color:None;color:rgb(0,0,0);")
 
+    def _write_smoothed_spectrum_file(self):
+        if not self.model.base_ptn_exist():
+            return
+        temp_dir = get_temp_dir(self.model.get_base_ptn_filename())
+        smooth_path = os.path.join(temp_dir, "smooth.chi")
+        x_raw, y_raw = self.model.base_ptn.get_raw()
+        if x_raw is None or y_raw is None:
+            return
+        settings = self.plot_ctrl._get_smoothing_settings()
+        active = bool(self.plot_ctrl._smoothing_active())
+        if not active:
+            if os.path.exists(smooth_path):
+                try:
+                    os.remove(smooth_path)
+                except Exception:
+                    pass
+            return
+        x_s, y_s = self.plot_ctrl._get_smoothed_pattern_xy(x_raw, y_raw)
+        row_roi = getattr(self.model.base_ptn, "row_roi", None)
+        header_lines = []
+        if row_roi is not None:
+            header_lines.append(
+                '# CCD ROI rows: {0:d}, {1:d} \n'.format(
+                    int(row_roi[0]), int(row_roi[1]))
+            )
+        header_lines.append(
+            '# Smoothed spectrum: despike={0:d}, sg_window={1:d}, sg_polyorder={2:d} \n'.format(
+                int(settings.get("despike_kernel", 0)),
+                int(settings.get("sg_window", 0)),
+                int(settings.get("sg_polyorder", 3)),
+            )
+        )
+        header_lines.append('\n')
+        self.model.base_ptn.write_temporary_processed_file(
+            temp_dir=temp_dir,
+            x_data=x_s,
+            y_data=y_s,
+            output_filename="smooth.chi",
+            preheader=''.join(header_lines),
+        )
+
     def save_ppss(self, quiet=False):
         return self.save_dpp(quiet=quiet)
 
@@ -889,16 +981,48 @@ class SessionController(object):
         '''
         this is to read from session file and put to the table
         '''
-        self.widget.spinBox_BGParam0.setValue(
-            self.model.base_ptn.params_chbg[0])
         self.widget.spinBox_BGParam1.setValue(
-            self.model.base_ptn.params_chbg[1])
-        self.widget.spinBox_BGParam2.setValue(
-            self.model.base_ptn.params_chbg[2])
+            self.model.base_ptn.params_chbg[0])
         self.widget.doubleSpinBox_Background_ROI_min.setValue(
             self.model.base_ptn.x_bg[0])
         self.widget.doubleSpinBox_Background_ROI_max.setValue(
             self.model.base_ptn.x_bg[-1])
+
+    def _collect_background_areas(self):
+        areas = []
+        table = getattr(self.widget, "tableWidget_BackgroundConstraints", None)
+        if table is None:
+            return areas
+        for row in range(table.rowCount()):
+            item_min = table.item(row, 0)
+            item_max = table.item(row, 1)
+            if item_min is None or item_max is None:
+                continue
+            try:
+                xmin = float(item_min.text())
+                xmax = float(item_max.text())
+            except Exception:
+                continue
+            if xmax < xmin:
+                xmin, xmax = xmax, xmin
+            areas.append([xmin, xmax])
+        return areas
+
+    def _apply_background_areas(self, areas):
+        table = getattr(self.widget, "tableWidget_BackgroundConstraints", None)
+        if table is None:
+            return
+        table.setRowCount(0)
+        for area in (areas or []):
+            try:
+                xmin = float(area[0])
+                xmax = float(area[1])
+            except Exception:
+                continue
+            row = table.rowCount()
+            table.insertRow(row)
+            table.setItem(row, 0, QtWidgets.QTableWidgetItem(f"{xmin:.3f}"))
+            table.setItem(row, 1, QtWidgets.QTableWidgetItem(f"{xmax:.3f}"))
         # the line below seems to be unnecessary, as there should be bgsub
         # self.model.base_ptn.subtract_bg(bg_roi, bg_params, yshift=0)
         # if self.model.waterfall_exist():

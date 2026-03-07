@@ -92,7 +92,7 @@ class CakeHistogramWidget(QtWidgets.QWidget):
         lo, hi_data = float(arr.min()), float(arr.max())
         if hi_data <= lo:
             hi_data = lo + 1.0
-        self._xlims = self._calc_view_xlim(lo, hi_data, vmin, vmax)
+        self._xlims = (lo, hi_data)
 
         self.ax.clear()
         hist_lo, hist_hi = self._xlims
@@ -112,30 +112,6 @@ class CakeHistogramWidget(QtWidgets.QWidget):
         if vmax is not None:
             self._line_max = self.ax.axvline(vmax, color="#ff9d5c", linewidth=1.6)
         self.canvas.draw_idle()
-
-    def _calc_view_xlim(self, lo, hi_data, vmin, vmax):
-        if not self.check_focus.isChecked() or vmin is None or vmax is None:
-            return lo, hi_data
-        left = float(min(vmin, vmax))
-        right = float(max(vmin, vmax))
-        if right <= left:
-            right = left + max(1.0, 1e-6 * max(abs(left), 1.0))
-        # Keep min/max guides at 20% and 80% of the histogram x-range.
-        # For x = x0 + p*(x1-x0):
-        # left at p=0.2 and right at p=0.8 gives:
-        # x0 = 4/3*left - 1/3*right, x1 = 4/3*right - 1/3*left
-        x0 = (4.0 / 3.0) * left - (1.0 / 3.0) * right
-        x1 = (4.0 / 3.0) * right - (1.0 / 3.0) * left
-        if x1 <= x0:
-            return lo, hi_data
-        # Expand, rather than clamp, to keep the 25/75 geometry stable.
-        if x0 > lo:
-            x0 = max(lo, x0)
-        if x1 < hi_data:
-            x1 = min(hi_data, x1)
-        if x1 <= x0:
-            return lo, hi_data
-        return x0, x1
 
     def _redraw_only(self):
         if self._data is None:

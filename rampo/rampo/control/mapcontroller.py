@@ -11,10 +11,8 @@ import matplotlib.patches as mpatches
 
 from .ramaniohelpers import (
     load_spectrum_xy,
-    load_bgsub_or_raw_xy,
-    find_temp_cake_triplet,
-    load_cake_data,
 )
+from ..ds_ramspec import Spectrum
 
 
 class MapController(object):
@@ -39,10 +37,8 @@ class MapController(object):
         self._pos_idx = []
         self._lin_to_file = {}
         self._chi_cache = {}
-        self._cake_cache = {}
         self._grid = (1, 1)
         self._roi_1d = None
-        self._roi_2d = None
         self._map_data = None
 
         self._sync_ui_from_roi = False
@@ -86,7 +82,7 @@ class MapController(object):
             return
         self.widget.tabWidget.currentChanged.connect(self._on_main_tab_changed)
 
-        self.widget.pushButton_MapLoadChi.clicked.connect(self._load_chi_files)
+        self.widget.pushButton_MapLoadChi.clicked.connect(self._load_spectrum_files)
         self.widget.spinBox_MapNx.valueChanged.connect(self._on_grid_changed)
         self.widget.spinBox_MapNy.valueChanged.connect(self._on_grid_changed)
         self.widget.comboBox_MapOrder.currentIndexChanged.connect(self._on_grid_changed)
@@ -125,9 +121,7 @@ class MapController(object):
     def is_roi_selection_active(self):
         sel_1d_active = (self._selector_1d is not None) and \
             bool(getattr(self._selector_1d, "active", False))
-        sel_2d_active = (self._selector_2d is not None) and \
-            bool(getattr(self._selector_2d, "active", False))
-        return bool(sel_1d_active or sel_2d_active)
+        return bool(sel_1d_active)
 
     def _set_status(self, msg):
         if hasattr(self.widget, "label_MapStatus"):
@@ -137,10 +131,10 @@ class MapController(object):
         if hasattr(self.widget, "label_MapLoaded"):
             self.widget.label_MapLoaded.setText(f"Loaded: {len(self._chi_files)}")
 
-    def _load_chi_files(self):
+    def _load_spectrum_files(self):
         files, _ = QtWidgets.QFileDialog.getOpenFileNames(
             self.widget,
-            "Select spectra for map",
+            "Select SPE files for map",
             self.model.chi_path,
             "Spectra (*.spe *.SPE *.chi)",
         )
@@ -151,9 +145,7 @@ class MapController(object):
         self._pos_idx = self._derive_position_indices(self._chi_files)
         self._rebuild_linear_lookup()
         self._chi_cache = {}
-        self._cake_cache = {}
         self._roi_1d = None
-        self._roi_2d = None
         self._map_data = None
 
         nx, ny = self._guess_grid_dims(len(self._chi_files))
@@ -243,7 +235,7 @@ class MapController(object):
         if not self._chi_files:
             return
         try:
-            x, __ = self._load_bgsub_xy_if_requested(self._chi_files[0])
+            x, __ = self._load_processed_xy(self._chi_files[0])
             if x.size == 0:
                 return
             xmin = float(np.nanmin(x))
@@ -251,8 +243,9 @@ class MapController(object):
             if (not np.isfinite(xmin)) or (not np.isfinite(xmax)) or (xmax <= xmin):
                 return
             self._roi_1d = (xmin, xmax)
-            self._roi_2d = None
-            self.widget.lineEdit_MapRoiSummary.setText(f"1D: 2theta [{xmin:.3f}, {xmax:.3f}]")
+            self.widget.lineEdit_MapRoiSummary.setText(
+                f"Shift [{xmin:.3f}, {xmax:.3f}]"
+            )
         except Exception:
             pass
 
@@ -332,18 +325,7 @@ class MapController(object):
             interactive=False,
             drag_from_anywhere=False,
         )
-        if self.widget.checkBox_ShowCake.isChecked():
-            self._selector_2d = RectangleSelector(
-                self.widget.mpl.canvas.ax_cake,
-                self._on_roi_2d_selected,
-                useblit=True,
-                button=[1],
-                interactive=False,
-                drag_from_anywhere=False,
-            )
-            self._set_status("Draw ROI on 1D pattern or 2D cake plot.")
-        else:
-            self._set_status("Draw ROI on 1D pattern. Enable Cake view for 2D ROI.")
+        self._set_status("Draw ROI on the spectrum to define the map range.")
 
     def _disable_roi_selectors(self):
         if self._selector_1d is not None:
@@ -352,16 +334,9 @@ class MapController(object):
             except Exception:
                 pass
             self._selector_1d = None
-        if self._selector_2d is not None:
-            try:
-                self._selector_2d.set_active(False)
-            except Exception:
-                pass
-            self._selector_2d = None
 
     def _clear_roi(self):
         self._roi_1d = None
-        self._roi_2d = None
         self.widget.lineEdit_MapRoiSummary.setText("")
         self._set_status("ROI cleared.")
         self.deactivate_interactions()
@@ -375,29 +350,10 @@ class MapController(object):
         if xmax <= xmin:
             return
         self._roi_1d = (xmin, xmax)
-        self._roi_2d = None
-        self.widget.lineEdit_MapRoiSummary.setText(f"1D: 2theta [{xmin:.3f}, {xmax:.3f}]")
-        self._set_status("1D ROI selected.")
-        self.deactivate_interactions()
-        self.refresh_roi_overlays()
-        self._compute_map()
-
-    def _on_roi_2d_selected(self, eclick, erelease):
-        if (eclick.xdata is None) or (erelease.xdata is None) or \
-                (eclick.ydata is None) or (erelease.ydata is None):
-            return
-        xmin = min(float(eclick.xdata), float(erelease.xdata))
-        xmax = max(float(eclick.xdata), float(erelease.xdata))
-        ymin = min(float(eclick.ydata), float(erelease.ydata))
-        ymax = max(float(eclick.ydata), float(erelease.ydata))
-        if (xmax <= xmin) or (ymax <= ymin):
-            return
-        self._roi_2d = (xmin, xmax, ymin, ymax)
-        self._roi_1d = None
         self.widget.lineEdit_MapRoiSummary.setText(
-            f"2D: 2theta [{xmin:.3f}, {xmax:.3f}], azi [{ymin:.3f}, {ymax:.3f}]"
+            f"Shift [{xmin:.3f}, {xmax:.3f}]"
         )
-        self._set_status("2D ROI selected.")
+        self._set_status("1D ROI selected.")
         self.deactivate_interactions()
         self.refresh_roi_overlays()
         self._compute_map()
@@ -405,22 +361,77 @@ class MapController(object):
     def _load_spectrum_xy(self, spectrum_path):
         return load_spectrum_xy(spectrum_path, self._chi_cache)
 
-    def _load_bgsub_xy_if_requested(self, chi_path):
+    def _load_processed_xy(self, spectrum_path):
+        spectrum = Spectrum(spectrum_path)
+        if str(spectrum_path).lower().endswith(".spe"):
+            spectrum.apply_excitation_wavelength(
+                float(self.widget.doubleSpinBox_SetWavelength.value()))
+            if hasattr(self.widget, "spinBox_CCDRowMin") and hasattr(self.widget, "spinBox_CCDRowMax"):
+                spectrum.set_spe_row_roi(
+                    int(self.widget.spinBox_CCDRowMin.value()),
+                    int(self.widget.spinBox_CCDRowMax.value()))
         use_bgsub = bool(
             getattr(self.widget, "checkBox_BgSub", None) and
             self.widget.checkBox_BgSub.isChecked()
         )
-        return load_bgsub_or_raw_xy(chi_path, use_bgsub, self._chi_cache)
-
-    def _find_temp_cake_triplet(self, chi_path):
-        return find_temp_cake_triplet(chi_path)
-
-    def _load_cake_data(self, chi_path):
-        return load_cake_data(chi_path, self._cake_cache)
+        fit_areas = []
+        table = getattr(self.widget, "tableWidget_BackgroundConstraints", None)
+        if table is not None:
+            for row in range(table.rowCount()):
+                item_min = table.item(row, 0)
+                item_max = table.item(row, 1)
+                if item_min is None or item_max is None:
+                    continue
+                try:
+                    xmin = float(item_min.text())
+                    xmax = float(item_max.text())
+                except Exception:
+                    continue
+                if xmax < xmin:
+                    xmin, xmax = xmax, xmin
+                fit_areas.append([xmin, xmax])
+        if use_bgsub:
+            x_raw, __ = spectrum.get_raw()
+            x_raw = np.asarray(x_raw, dtype=float)
+            if x_raw.size == 0:
+                return x_raw, np.asarray([], dtype=float)
+            roi_min = float(self.widget.doubleSpinBox_Background_ROI_min.value())
+            roi_max = float(self.widget.doubleSpinBox_Background_ROI_max.value())
+            roi_min = max(float(np.nanmin(x_raw)), roi_min)
+            roi_max = min(float(np.nanmax(x_raw)), roi_max)
+            if roi_max <= roi_min:
+                roi_min = float(np.nanmin(x_raw))
+                roi_max = float(np.nanmax(x_raw))
+            y_fit = spectrum.get_raw()[1]
+            if (self.plot_ctrl is not None) and \
+                    bool(getattr(self.plot_ctrl, "_smoothing_active", lambda: False)()):
+                __, y_fit = self.plot_ctrl._get_smoothed_pattern_xy(x_raw, y_fit)
+            spectrum.get_chbg(
+                [roi_min, roi_max],
+                [int(self.widget.spinBox_BGParam1.value())],
+                yshift=0,
+                fit_areas=fit_areas,
+                y_source=y_fit,
+            )
+            x, y = spectrum.get_bgsub()
+        else:
+            x, y = spectrum.get_raw()
+            x = np.asarray(x, dtype=float)
+            y = np.asarray(y, dtype=float)
+            if (self.plot_ctrl is not None) and \
+                    bool(getattr(self.plot_ctrl, "_smoothing_active", lambda: False)()):
+                x, y = self.plot_ctrl._get_smoothed_pattern_xy(x, y)
+            return x, y
+        x = np.asarray(x, dtype=float)
+        y = np.asarray(y, dtype=float)
+        if not use_bgsub and (self.plot_ctrl is not None) and \
+                bool(getattr(self.plot_ctrl, "_smoothing_active", lambda: False)()):
+            x, y = self.plot_ctrl._get_smoothed_pattern_xy(x, y)
+        return x, y
 
     def _compute_map(self):
         if not self._chi_files:
-            self._set_status("Load CHI files first.")
+            self._set_status("Load SPE files first.")
             return
         nx, ny = self._grid
         n = len(self._chi_files)
@@ -429,7 +440,7 @@ class MapController(object):
                 f"Grid mismatch: Nx*Ny ({nx}x{ny}={nx * ny}) must equal loaded files ({n})."
             )
             return
-        if (self._roi_1d is None) and (self._roi_2d is None):
+        if self._roi_1d is None:
             self._set_status("Select ROI first.")
             return
 
@@ -437,28 +448,13 @@ class MapController(object):
         failures = []
         for i, chi_path in enumerate(self._chi_files):
             try:
-                if self._roi_1d is not None:
-                    x, y = self._load_bgsub_xy_if_requested(chi_path)
-                    xmin, xmax = self._roi_1d
-                    m = (x >= xmin) & (x <= xmax)
-                    if not np.any(m):
-                        values[i] = np.nan
-                    else:
-                        # Requested behavior: add all intensities in ROI range.
-                        values[i] = float(np.nansum(y[m]))
+                x, y = self._load_processed_xy(chi_path)
+                xmin, xmax = self._roi_1d
+                m = (x >= xmin) & (x <= xmax)
+                if not np.any(m):
+                    values[i] = np.nan
                 else:
-                    cake = self._load_cake_data(chi_path)
-                    if cake is None:
-                        raise RuntimeError("No cake temp files")
-                    tth, azi, intensity = cake
-                    xmin, xmax, ymin, ymax = self._roi_2d
-                    mt = (tth >= xmin) & (tth <= xmax)
-                    ma = (azi >= ymin) & (azi <= ymax)
-                    if (not np.any(mt)) or (not np.any(ma)):
-                        values[i] = np.nan
-                    else:
-                        sub = intensity[np.ix_(ma, mt)]
-                        values[i] = float(np.nansum(sub))
+                    values[i] = float(np.nansum(y[m]))
             except Exception as exc:
                 failures.append((chi_path, str(exc)))
                 values[i] = np.nan
@@ -482,14 +478,7 @@ class MapController(object):
                 f"Map computed with {len(failures)} failures. "
                 f"First: {first_name} ({first_err})")
         else:
-            if self._roi_1d is not None:
-                if bool(getattr(self.widget, "checkBox_BgSub", None) and
-                        self.widget.checkBox_BgSub.isChecked()):
-                    self._set_status("Map computed from 1D bg-subtracted intensity in ROI.")
-                else:
-                    self._set_status("Map computed from raw 1D intensity (no bg subtraction).")
-            else:
-                self._set_status("Map computed from raw 2D cake intensity (no bg subtraction).")
+            self._set_status("Map computed from processed spectrum intensity in ROI.")
         self._schedule_overlay_refresh()
 
     def _effective_cmap(self):
@@ -627,7 +616,7 @@ class MapController(object):
             return False
         if not self._is_map_tab_active():
             return False
-        return (self._roi_1d is not None) or (self._roi_2d is not None)
+        return self._roi_1d is not None
 
     def _clear_roi_overlays(self):
         changed = False
@@ -663,18 +652,6 @@ class MapController(object):
                     xmin, xmax, ymin=0.0, ymax=1.0,
                     facecolor="red", edgecolor="red", alpha=0.2, linewidth=1.2
                 )
-            elif self._roi_2d is not None and self.widget.checkBox_ShowCake.isChecked():
-                xmin, xmax, ymin, ymax = self._roi_2d
-                ax = self.widget.mpl.canvas.ax_cake
-                self._roi_artist_2d = mpatches.Rectangle(
-                    (xmin, ymin),
-                    xmax - xmin,
-                    ymax - ymin,
-                    fill=False,
-                    edgecolor="red",
-                    linewidth=1.8,
-                )
-                ax.add_patch(self._roi_artist_2d)
             self.widget.mpl.canvas.draw_idle()
         except Exception:
             # Keep map functionality robust even if overlay draw fails.

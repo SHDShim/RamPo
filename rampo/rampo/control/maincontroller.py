@@ -8,6 +8,7 @@ from qtpy import QtCore
 import gc
 import datetime
 from contextlib import contextmanager
+from matplotlib.widgets import RectangleSelector
 from ..view import MainWindow
 from ..model import PeakPoModel, PeakPoModel8
 from .basespectrumcontroller import BaseSpectrumController
@@ -23,7 +24,6 @@ from .sessioncontroller import SessionController
 from .diffcontroller import DiffController
 from .peakfitcontroller import PeakFitController
 from .peakfittablecontroller import PeakfitTableController
-from .ccdazicontroller import CCDAziController
 from .exportpythoncontroller import ExportPythonController
 from .mapcontroller import MapController
 from .sequencecontroller import SequenceController
@@ -40,7 +40,11 @@ class MainController(object):
     def __init__(self):
 
         print("MainController.__init__ - START")
+        self._shutdown_done = False
+        self._defer_plot_update_count = 0
+
         self.widget = MainWindow()
+        self.widget._main_controller = self
         print("  ✓ MainWindow created")
 
         self.model = PeakPoModel8()
@@ -56,6 +60,7 @@ class MainController(object):
         
         self.plot_ctrl = MplController(self.model, self.widget)
         print("  ✓ MplController created")
+        self._replace_toolbar_save_action()
 
         self.diff_ctrl = DiffController(self.model, self.widget, self.plot_ctrl)
         self.plot_ctrl.set_diff_controller(self.diff_ctrl)
@@ -74,8 +79,7 @@ class MainController(object):
             plot_ctrl=self.plot_ctrl)
         print("  ✓ SequenceController created")
         
-        self.ccdazi_ctrl = CCDAziController(self.model, self.widget)
-        print("  ✓ CCDAziController created")
+        self.ccdazi_ctrl = None
         
         self.waterfall_ctrl = WaterfallController(self.model, self.widget)
         self.waterfall_ctrl.set_navigation_helpers(
@@ -107,6 +111,7 @@ class MainController(object):
             self.model, self.widget, plot_ctrl=self.plot_ctrl)
         print("  ✓ ExportPythonController created")
         self._propagate_diff_controller()
+        self._bg_area_selector = None
         
         self.read_setting()
         print("  ✓ read_setting() done")
@@ -116,8 +121,6 @@ class MainController(object):
         
         self.clip = QtWidgets.QApplication.clipboard()
         print("  ✓ clipboard set")
-        self._shutdown_done = False
-        self._defer_plot_update_count = 0
         
         print("MainController.__init__ - DONE\n")
 
@@ -145,6 +148,36 @@ class MainController(object):
             ccd_plot_ctrl = getattr(self.base_spectrum_ctrl.ccd_ctrl, "plot_ctrl", None)
             if (ccd_plot_ctrl is not None) and hasattr(ccd_plot_ctrl, "set_diff_controller"):
                 ccd_plot_ctrl.set_diff_controller(self.diff_ctrl)
+
+    def _replace_toolbar_save_action(self):
+        toolbar = getattr(getattr(self.widget, "mpl", None), "ntb", None)
+        if toolbar is None:
+            return
+
+        def _save_session_from_toolbar(*args, **kwargs):
+            del args, kwargs
+            self.session_ctrl.save_dpp()
+
+        try:
+            toolbar.save_figure = _save_session_from_toolbar
+        except Exception:
+            pass
+
+        try:
+            for action in toolbar.actions():
+                text = str(action.text() or "").strip().lower()
+                tip = str(action.toolTip() or "").strip().lower()
+                if text == "save" or tip.startswith("save the figure"):
+                    try:
+                        action.triggered.disconnect()
+                    except Exception:
+                        pass
+                    action.triggered.connect(_save_session_from_toolbar)
+                    action.setToolTip("Save Rampo session")
+                    action.setStatusTip("Save Rampo session")
+                    break
+        except Exception:
+            pass
 
     def show_window(self):
         """Show the main window and ensure it renders"""
@@ -180,43 +213,50 @@ class MainController(object):
             'button_press_event', self.deliver_mouse_signal)
         self.widget.mpl.canvas.mpl_connect(
             'key_press_event', self.on_key_press)
-        self.widget.spinBox_AziShift.valueChanged.connect(
-            self.apply_changes_to_graph)
         self.widget.doubleSpinBox_Pressure.valueChanged.connect(
             self.apply_pt_to_graph)
         self.widget.pushButton_S_PIncrease.clicked.connect(
             lambda: self.quick_p_change(1))
         self.widget.pushButton_S_PDecrease.clicked.connect(
             lambda: self.quick_p_change(-1))
-        self.widget.pushButton_S_TIncrease.clicked.connect(
-            lambda: self.quick_temp_change(1))
-        self.widget.pushButton_S_TDecrease.clicked.connect(
-            lambda: self.quick_temp_change(-1))
         self.widget.doubleSpinBox_Temperature.valueChanged.connect(
             self.apply_pt_to_graph)
         self.widget.doubleSpinBox_SetWavelength.valueChanged.connect(
             self.apply_wavelength)
-        self.widget.pushButton_SaveBgSubCHI.clicked.connect(self.save_bgsubchi)
+        for name in ("spinBox_SpectrumDespike", "spinBox_SpectrumSGWindow", "spinBox_SpectrumSGPoly"):
+            if hasattr(self.widget, name):
+                getattr(self.widget, name).valueChanged.connect(
+                    self.apply_spectrum_smoothing)
+        if hasattr(self.widget, "pushButton_BGAreaAdd"):
+            self.widget.pushButton_BGAreaAdd.toggled.connect(
+                self.toggle_background_area_selector)
+        if hasattr(self.widget, "pushButton_BGAreaRemove"):
+            self.widget.pushButton_BGAreaRemove.clicked.connect(
+                self.remove_selected_background_area)
+        if hasattr(self.widget, "pushButton_BGAreaClear"):
+            self.widget.pushButton_BGAreaClear.clicked.connect(
+                self.clear_background_areas)
+        if hasattr(self.widget, "pushButton_BGFit"):
+            self.widget.pushButton_BGFit.clicked.connect(
+                self.update_bgsub)
         if hasattr(self.widget, "pushButton_ExportPythonView"):
             self.widget.pushButton_ExportPythonView.clicked.connect(
                 self.export_py_ctrl.export_current_view)
         self.widget.pushButton_SetXEat30.clicked.connect(
-            lambda: self.setXEat(0.4133))
+            lambda: self.setXEat(532.22))
         self.widget.pushButton_SetXEat37.clicked.connect(
-            lambda: self.setXEat(0.3344))
+            lambda: self.setXEat(660.00))
         self.widget.pushButton_SetXEat42.clicked.connect(
-            lambda: self.setXEat(0.2952))
+            lambda: self.setXEat(785.00))
         """
         self.widget.pushButton_ExportToUCFit.clicked.connect(
             self.export_to_ucfit)
         """
         self.widget.pushButton_ImportJlist.clicked.connect(
             self.load_jlist_from_session)
-        self.widget.pushButton_UpdateBackground.clicked.connect(
-            self.update_bgsub)
-        if hasattr(self.widget, "pushButton_ResetBGParams"):
-            self.widget.pushButton_ResetBGParams.clicked.connect(
-                self.reset_bg_params_to_default)
+        if hasattr(self.widget, "pushButton_SpectrumRaw"):
+            self.widget.pushButton_SpectrumRaw.clicked.connect(
+                self.reset_spectrum_smoothing_to_raw)
         self.widget.checkBox_LongCursor.stateChanged.connect(
             self._handle_cursor_toggle)  # Changed from clicked to stateChanged
         # ✅ ADD: Connect checkbox to deactivate toolbar
@@ -270,6 +310,9 @@ class MainController(object):
         self.widget.pushButton_S_Zoom.clicked.connect(self.plot_new_graph)
         self.widget.checkBox_AutoY.clicked.connect(self.apply_changes_to_graph)
         self.widget.checkBox_BgSub.clicked.connect(self.apply_changes_to_graph)
+        if hasattr(self.widget, "checkBox_ShowBg"):
+            self.widget.checkBox_ShowBg.clicked.connect(
+                self.apply_changes_to_graph)
         self.widget.checkBox_ShowWaterfallLabels.clicked.connect(
             self.apply_changes_to_graph)
         self.widget.checkBox_ShowMillerIndices_Cake.clicked.connect(
@@ -277,17 +320,12 @@ class MainController(object):
         # self.widget.actionClose.triggered.connect(self.closeEvent)
         self.widget.tabWidget.currentChanged.connect(self.check_for_peakfit)
         # self.widget.tabWidget.setTabEnabled(8, False)
-        self.widget.pushButton_DelTempCHI.clicked.connect(self.del_temp_chi)
-        self.widget.pushButton_DelTempCake.clicked.connect(self.del_temp_cake)
-        # slide bars
-        self.widget.horizontalSlider_VMin.setValue(0)
-        self.widget.horizontalSlider_VMax.setValue(100)
-        self.widget.horizontalSlider_MaxScaleBars.valueChanged.connect(
-            self.apply_changes_to_graph)
-        self.widget.horizontalSlider_VMin.valueChanged.connect(
-            self.apply_changes_to_graph)
-        self.widget.horizontalSlider_VMax.valueChanged.connect(
-            self.apply_changes_to_graph)
+        if hasattr(self.widget, "doubleSpinBox_CCDScaleMin"):
+            self.widget.doubleSpinBox_CCDScaleMin.valueChanged.connect(
+                self.apply_changes_to_graph)
+        if hasattr(self.widget, "doubleSpinBox_CCDScaleMax"):
+            self.widget.doubleSpinBox_CCDScaleMax.valueChanged.connect(
+                self.apply_changes_to_graph)
         self.widget.horizontalSlider_CakeAxisSize.valueChanged.connect(
             self.apply_changes_to_graph)
         self.widget.horizontalSlider_JCPDSBarScale.valueChanged.connect(
@@ -306,8 +344,6 @@ class MainController(object):
         self.widget.pushButton_UpdateUCFitSteps.clicked.connect(
             self.update_ucfit_table)
         """
-        self.widget.pushButton_IntegrateCake.clicked.connect(
-            self.integrate_to_1d)
         self.widget.pushButton_PrevBasePtn.clicked.connect(
             lambda: self.goto_next_file('previous'))
         self.widget.pushButton_NextBasePtn.clicked.connect(
@@ -542,10 +578,8 @@ class MainController(object):
                 self.widget.doubleSpinBox_Background_ROI_min.value(),
                 self.widget.doubleSpinBox_Background_ROI_max.value())
         preheader_line1 = \
-            '2-theta # BG Params: {0: d}, {1: d}, {2: d} \n'.format(
-                self.widget.spinBox_BGParam0.value(),
-                self.widget.spinBox_BGParam1.value(),
-                self.widget.spinBox_BGParam2.value())
+            '2-theta # BG Params: {0: d} \n'.format(
+                self.widget.spinBox_BGParam1.value())
         preheader_line2 = '\n'
         writechi(filen_chi, x, y, preheader=preheader_line0 +
                  preheader_line1 + preheader_line2)
@@ -571,15 +605,23 @@ class MainController(object):
             self.settings.setValue(
                 'fontsize_waterfall_label',
                 self.widget.comboBox_WaterfallFontSize.currentText())
-        # Persist azimuthal shift across app restarts.
-        self.settings.setValue(
-            'azi_shift',
-            int(self.widget.spinBox_AziShift.value()))
+        if hasattr(self.widget, "spinBox_SpectrumDespike"):
+            self.settings.setValue(
+                'spectrum_smoothing_despike',
+                int(self.widget.spinBox_SpectrumDespike.value()))
+        if hasattr(self.widget, "spinBox_SpectrumSGWindow"):
+            self.settings.setValue(
+                'spectrum_smoothing_sg_window',
+                int(self.widget.spinBox_SpectrumSGWindow.value()))
+        if hasattr(self.widget, "spinBox_SpectrumSGPoly"):
+            self.settings.setValue(
+                'spectrum_smoothing_sg_polyorder',
+                int(self.widget.spinBox_SpectrumSGPoly.value()))
         # CHI navigation carry-over policy
         nav_keys = [
             ("carry_nav_jcpds", "checkBox_CarryNavJCPDS"),
             ("carry_nav_pressure", "checkBox_CarryNavPressure"),
-            ("carry_nav_temperature", "checkBox_CarryNavTemperature"),
+            ("carry_nav_spectrum_smoothing", "checkBox_CarryNavSpectrumSmoothing"),
             ("carry_nav_cake_z_scale", "checkBox_CarryNavCakeZScale"),
             ("carry_nav_ccd_roi", "checkBox_CarryNavCCDRoi"),
             ("carry_nav_background", "checkBox_CarryNavBackground"),
@@ -624,20 +666,32 @@ class MainController(object):
             if self.widget.comboBox_WaterfallFontSize.findText(wf_fs) >= 0:
                 self.widget.comboBox_WaterfallFontSize.setCurrentText(wf_fs)
         if hasattr(self.widget, "comboBox_CakeColormap"):
-            # Always start with gray_r regardless of previous sessions/settings.
-            self.widget.comboBox_CakeColormap.setCurrentText("gray_r")
-        raw_azi_shift = self.settings.value(
-            'azi_shift',
-            int(self.widget.spinBox_AziShift.value()))
-        try:
-            azi_shift = int(raw_azi_shift)
-        except Exception:
-            azi_shift = int(self.widget.spinBox_AziShift.value())
-        self.widget.spinBox_AziShift.setValue(azi_shift)
+            # Always start with inferno regardless of previous sessions/settings.
+            self.widget.comboBox_CakeColormap.setCurrentText("inferno")
+        if hasattr(self.widget, "spinBox_SpectrumDespike"):
+            try:
+                despike = int(self.settings.value('spectrum_smoothing_despike', 0))
+            except Exception:
+                despike = 0
+            self.widget.spinBox_SpectrumDespike.setValue(despike)
+        if hasattr(self.widget, "spinBox_SpectrumSGWindow"):
+            try:
+                sg_window = int(self.settings.value('spectrum_smoothing_sg_window', 0))
+            except Exception:
+                sg_window = 0
+            self.widget.spinBox_SpectrumSGWindow.setValue(sg_window)
+        if hasattr(self.widget, "spinBox_SpectrumSGPoly"):
+            try:
+                sg_poly = int(self.settings.value('spectrum_smoothing_sg_polyorder', 3))
+            except Exception:
+                sg_poly = 3
+            self.widget.spinBox_SpectrumSGPoly.setValue(sg_poly)
+        if hasattr(self.widget, "spinBox_SpectrumDespike"):
+            self.apply_spectrum_smoothing()
         nav_defaults = {
             "checkBox_CarryNavJCPDS": True,
             "checkBox_CarryNavPressure": True,
-            "checkBox_CarryNavTemperature": True,
+            "checkBox_CarryNavSpectrumSmoothing": True,
             "checkBox_CarryNavCakeZScale": False,
             "checkBox_CarryNavCCDRoi": True,
             "checkBox_CarryNavBackground": False,
@@ -647,7 +701,7 @@ class MainController(object):
         nav_keys = {
             "checkBox_CarryNavJCPDS": "carry_nav_jcpds",
             "checkBox_CarryNavPressure": "carry_nav_pressure",
-            "checkBox_CarryNavTemperature": "carry_nav_temperature",
+            "checkBox_CarryNavSpectrumSmoothing": "carry_nav_spectrum_smoothing",
             "checkBox_CarryNavCakeZScale": "carry_nav_cake_z_scale",
             "checkBox_CarryNavCCDRoi": "carry_nav_ccd_roi",
             "checkBox_CarryNavBackground": "carry_nav_background",
@@ -737,20 +791,18 @@ class MainController(object):
             hist = self.widget.cake_hist_widget
             cake_hist = {
                 "log_y": bool(hist.check_log.isChecked()),
-                "focus_range": bool(hist.check_focus.isChecked()),
-                "low_pct": float(hist.spin_low_pct.value()),
-                "high_pct": float(hist.spin_high_pct.value()),
             }
         return {
             "source_chi": source_chi,
             "jcpds_lst": copy.deepcopy(self.model.jcpds_lst),
             "pressure": float(self.model.get_saved_pressure()),
             "temperature": float(self.model.get_saved_temperature()),
+            "spectrum_smoothing": self.get_spectrum_smoothing_settings(),
             "cake_z_scale": {
-                "int_max": int(self.widget.spinBox_MaxCakeScale.value()),
-                "min_bar": int(self.widget.horizontalSlider_VMin.value()),
-                "max_bar": int(self.widget.horizontalSlider_VMax.value()),
-                "scale_bar": int(self.widget.horizontalSlider_MaxScaleBars.value()),
+                "vmin": float(self.widget.doubleSpinBox_CCDScaleMin.value())
+                if hasattr(self.widget, "doubleSpinBox_CCDScaleMin") else 0.0,
+                "vmax": float(self.widget.doubleSpinBox_CCDScaleMax.value())
+                if hasattr(self.widget, "doubleSpinBox_CCDScaleMax") else 1.0,
                 "hist": cake_hist,
             },
             "ccd_roi": {
@@ -762,9 +814,8 @@ class MainController(object):
             "background": {
                 "roi_min": float(self.widget.doubleSpinBox_Background_ROI_min.value()),
                 "roi_max": float(self.widget.doubleSpinBox_Background_ROI_max.value()),
-                "n_points": int(self.widget.spinBox_BGParam0.value()),
-                "n_order": int(self.widget.spinBox_BGParam1.value()),
-                "n_iteration": int(self.widget.spinBox_BGParam2.value()),
+                "poly_order": int(self.widget.spinBox_BGParam1.value()),
+                "areas": self.get_background_fit_areas(),
             },
             "waterfall_list": copy.deepcopy(self.model.waterfall_ptn),
             "fits_information": {
@@ -794,23 +845,29 @@ class MainController(object):
             self.widget.doubleSpinBox_Pressure.setValue(float(snap["pressure"]))
             carried_any = True
 
-        if self._should_carry_nav_category("temperature", "checkBox_CarryNavTemperature"):
-            self.model.save_temperature(float(snap["temperature"]))
-            self.widget.doubleSpinBox_Temperature.setValue(float(snap["temperature"]))
+        if self._should_carry_nav_category("spectrum_smoothing", "checkBox_CarryNavSpectrumSmoothing"):
+            params = snap.get("spectrum_smoothing", {}) or {}
+            if hasattr(self.widget, "spinBox_SpectrumDespike"):
+                self.widget.spinBox_SpectrumDespike.setValue(
+                    int(params.get("despike_kernel", 0)))
+            if hasattr(self.widget, "spinBox_SpectrumSGWindow"):
+                self.widget.spinBox_SpectrumSGWindow.setValue(
+                    int(params.get("sg_window", 0)))
+            if hasattr(self.widget, "spinBox_SpectrumSGPoly"):
+                self.widget.spinBox_SpectrumSGPoly.setValue(
+                    int(params.get("sg_polyorder", 3)))
+            self.apply_spectrum_smoothing()
             carried_any = True
 
         if self._should_carry_nav_category("cake_z_scale", "checkBox_CarryNavCakeZScale"):
             cake = snap["cake_z_scale"]
-            self.widget.spinBox_MaxCakeScale.setValue(int(cake["int_max"]))
-            self.widget.horizontalSlider_VMin.setValue(int(cake["min_bar"]))
-            self.widget.horizontalSlider_VMax.setValue(int(cake["max_bar"]))
-            self.widget.horizontalSlider_MaxScaleBars.setValue(int(cake["scale_bar"]))
+            if hasattr(self.widget, "doubleSpinBox_CCDScaleMin"):
+                self.widget.doubleSpinBox_CCDScaleMin.setValue(float(cake.get("vmin", 0.0)))
+            if hasattr(self.widget, "doubleSpinBox_CCDScaleMax"):
+                self.widget.doubleSpinBox_CCDScaleMax.setValue(float(cake.get("vmax", 1.0)))
             hist = cake.get("hist", {})
             if hasattr(self.widget, "cake_hist_widget") and hist != {}:
                 self.widget.cake_hist_widget.check_log.setChecked(bool(hist.get("log_y", True)))
-                self.widget.cake_hist_widget.check_focus.setChecked(bool(hist.get("focus_range", True)))
-                self.widget.cake_hist_widget.spin_low_pct.setValue(float(hist.get("low_pct", 40.0)))
-                self.widget.cake_hist_widget.spin_high_pct.setValue(float(hist.get("high_pct", 99.95)))
             carried_any = True
 
         if self._should_carry_nav_category("ccd_roi", "checkBox_CarryNavCCDRoi"):
@@ -834,9 +891,8 @@ class MainController(object):
             bg = snap["background"]
             self.widget.doubleSpinBox_Background_ROI_min.setValue(float(bg["roi_min"]))
             self.widget.doubleSpinBox_Background_ROI_max.setValue(float(bg["roi_max"]))
-            self.widget.spinBox_BGParam0.setValue(int(bg["n_points"]))
-            self.widget.spinBox_BGParam1.setValue(int(bg["n_order"]))
-            self.widget.spinBox_BGParam2.setValue(int(bg["n_iteration"]))
+            self.widget.spinBox_BGParam1.setValue(int(bg.get("poly_order", 3)))
+            self.set_background_fit_areas(bg.get("areas", []))
             if self.model.base_ptn_exist():
                 self.update_bgsub()
             carried_any = True
@@ -985,10 +1041,10 @@ class MainController(object):
                     self.model.current_section.invalidate_fit_result()
             """
             if self.model.current_section.fitted():
-                self.model.current_section.invalidate_fit_result()
+                    self.model.current_section.invalidate_fit_result()
             self.pick_peak(mouse_button, event.xdata, event.ydata)
         else:
-            self.read_plot(mouse_button, event.xdata, event.ydata)
+            return
 
     def pick_peak(self, mouse_button, xdata, ydata):
         """
@@ -1024,40 +1080,97 @@ class MainController(object):
         self.peakfit_table_ctrl.update_peak_constraints()
         self.plot_ctrl.update()
 
-    def read_plot(self, mouse_button, xdata, ydata):
-        if mouse_button == 'right':
-            return
-        x_click = float(xdata)
-        y_click = float(ydata)
-        x_click_dsp = self.widget.doubleSpinBox_SetWavelength.value() / 2. / \
-            np.sin(np.radians(x_click / 2.))
-        clicked_position = \
-            "Clicked position: {0:.4f}, {1:.1f}, \n d-sp = {2:.4f} \u212B".\
-            format(x_click, y_click, x_click_dsp)
-        if (not self.model.jcpds_exist()) and (not self.model.ucfit_exist()):
-            QtWidgets.QMessageBox.warning(self.widget, "Information",
-                                          clicked_position)
-        else:
-            # get jcpds information
-            x_find = xdata
-            textinfo = self._find_closestjcpds(x_find)
-            QtWidgets.QMessageBox.warning(self.widget, "Information",
-                                          clicked_position + '\n' + textinfo)
-
     def setXEat(self, wavelength):
         self.widget.doubleSpinBox_SetWavelength.setValue(wavelength)
         self.apply_wavelength()
 
     def apply_wavelength(self):
-        # self.wavelength = value
-        self.model.base_ptn.wavelength = \
-            self.widget.doubleSpinBox_SetWavelength.value()
-        xray_energy = convert_wl_to_energy(self.model.base_ptn.wavelength)
-        self.widget.label_XRayEnergy.setText(
-            "({:.3f} keV)".format(xray_energy))
+        if self.model.base_ptn_exist():
+            self.model.set_base_ptn_wavelength(
+                self.widget.doubleSpinBox_SetWavelength.value())
+            self.sync_background_roi_spinboxes(force_full_range=True)
+        self.widget.label_XRayEnergy.setText("nm")
+        if self._plot_update_deferred():
+            return
+        if self.model.base_ptn_exist():
+            self.update_bgsub()
+        self.plot_ctrl.update()
+
+    def get_spectrum_smoothing_settings(self):
+        if not hasattr(self.widget, "spinBox_SpectrumDespike"):
+            return {
+                "despike_kernel": 0,
+                "sg_window": 0,
+                "sg_polyorder": 3,
+            }
+        despike = int(self.widget.spinBox_SpectrumDespike.value())
+        sg_window = int(self.widget.spinBox_SpectrumSGWindow.value()) \
+            if hasattr(self.widget, "spinBox_SpectrumSGWindow") else 0
+        sg_poly = int(self.widget.spinBox_SpectrumSGPoly.value()) \
+            if hasattr(self.widget, "spinBox_SpectrumSGPoly") else 3
+        if despike > 0 and despike % 2 == 0:
+            despike += 1
+        if sg_window > 0 and sg_window % 2 == 0:
+            sg_window += 1
+        if sg_window <= 1:
+            sg_window = 0
+        sg_poly = max(0, sg_poly)
+        if sg_window > 0:
+            sg_poly = min(sg_poly, sg_window - 1)
+        return {
+            "despike_kernel": despike,
+            "sg_window": sg_window,
+            "sg_polyorder": sg_poly,
+        }
+
+    def apply_spectrum_smoothing(self):
+        params = self.get_spectrum_smoothing_settings()
+        if hasattr(self.widget, "spinBox_SpectrumDespike"):
+            desired = int(params["despike_kernel"])
+            if self.widget.spinBox_SpectrumDespike.value() != desired:
+                self.widget.spinBox_SpectrumDespike.blockSignals(True)
+                self.widget.spinBox_SpectrumDespike.setValue(desired)
+                self.widget.spinBox_SpectrumDespike.blockSignals(False)
+        if hasattr(self.widget, "spinBox_SpectrumSGWindow"):
+            desired = int(params["sg_window"])
+            if self.widget.spinBox_SpectrumSGWindow.value() != desired:
+                self.widget.spinBox_SpectrumSGWindow.blockSignals(True)
+                self.widget.spinBox_SpectrumSGWindow.setValue(desired)
+                self.widget.spinBox_SpectrumSGWindow.blockSignals(False)
+        if hasattr(self.widget, "spinBox_SpectrumSGPoly"):
+            desired = int(params["sg_polyorder"])
+            if self.widget.spinBox_SpectrumSGPoly.value() != desired:
+                self.widget.spinBox_SpectrumSGPoly.blockSignals(True)
+                self.widget.spinBox_SpectrumSGPoly.setValue(desired)
+                self.widget.spinBox_SpectrumSGPoly.blockSignals(False)
         if self._plot_update_deferred():
             return
         self.plot_ctrl.update()
+
+    def force_update_spectrum_process(self):
+        fw = QtWidgets.QApplication.focusWidget()
+        if isinstance(fw, QtWidgets.QAbstractSpinBox):
+            try:
+                fw.interpretText()
+            except Exception:
+                pass
+        if fw is not None:
+            try:
+                fw.clearFocus()
+            except Exception:
+                pass
+        QtWidgets.QApplication.processEvents()
+        self.apply_spectrum_smoothing()
+        self.update_bgsub()
+
+    def reset_spectrum_smoothing_to_raw(self):
+        if hasattr(self.widget, "spinBox_SpectrumDespike"):
+            self.widget.spinBox_SpectrumDespike.setValue(0)
+        if hasattr(self.widget, "spinBox_SpectrumSGWindow"):
+            self.widget.spinBox_SpectrumSGWindow.setValue(0)
+        if hasattr(self.widget, "spinBox_SpectrumSGPoly"):
+            self.widget.spinBox_SpectrumSGPoly.setValue(3)
+        self.force_update_spectrum_process()
 
     def update_bgsub(self):
         '''
@@ -1075,10 +1188,9 @@ class MainController(object):
                 self.widget, "Warning",
                 "Base pattern has no raw data for background fitting.")
             return
+        self.sync_background_roi_spinboxes(force_full_range=False)
         """receive new bg parameters and update the graph"""
-        bg_params = [self.widget.spinBox_BGParam0.value(),
-                     self.widget.spinBox_BGParam1.value(),
-                     self.widget.spinBox_BGParam2.value()]
+        bg_params = [self.widget.spinBox_BGParam1.value()]
         bg_roi = [self.widget.doubleSpinBox_Background_ROI_min.value(),
                   self.widget.doubleSpinBox_Background_ROI_max.value()]
         if (bg_roi[0] <= x_raw_base.min()):
@@ -1087,7 +1199,12 @@ class MainController(object):
         if (bg_roi[1] >= x_raw_base.max()):
             bg_roi[1] = x_raw_base.max()
             self.widget.doubleSpinBox_Background_ROI_max.setValue(bg_roi[1])
-        self.model.base_ptn.subtract_bg(bg_roi, bg_params, yshift=0)
+        bg_fit_areas = self.get_background_fit_areas()
+        __, y_fit_base = self._get_background_fit_source_xy(
+            x_raw_base, y_raw_base)
+        self.model.base_ptn.subtract_bg(
+            bg_roi, bg_params, yshift=0,
+            fit_areas=bg_fit_areas, y_source=y_fit_base)
         temp_dir = get_temp_dir(self.model.get_base_ptn_filename())
         self.model.base_ptn.write_temporary_bgfiles(temp_dir=temp_dir)
         if self.model.waterfall_exist():
@@ -1102,7 +1219,11 @@ class MainController(object):
                         (len(x_raw) == 0) or (len(y_raw) == 0):
                     n_skipped += 1
                     continue
-                pattern.subtract_bg(bg_roi, bg_params, yshift=0)
+                __, y_fit_pattern = self._get_background_fit_source_xy(
+                    x_raw, y_raw)
+                pattern.subtract_bg(
+                    bg_roi, bg_params, yshift=0,
+                    fit_areas=bg_fit_areas, y_source=y_fit_pattern)
             if n_skipped > 0:
                 print(str(datetime.datetime.now())[:-7],
                     ": Skipped BG subtraction for {0:d} waterfall item(s) "
@@ -1111,10 +1232,231 @@ class MainController(object):
             return
         self.plot_new_graph()
 
-    def reset_bg_params_to_default(self):
-        self.widget.spinBox_BGParam0.setValue(20)
-        self.widget.spinBox_BGParam1.setValue(10)
-        self.widget.spinBox_BGParam2.setValue(20)
+    def sync_background_roi_spinboxes(self, force_full_range=False):
+        if not self.model.base_ptn_exist():
+            return
+        x_raw = getattr(self.model.base_ptn, "x_raw", None)
+        if x_raw is None or len(x_raw) == 0:
+            return
+        x_arr = np.asarray(x_raw, dtype=float)
+        finite = x_arr[np.isfinite(x_arr)]
+        if finite.size == 0:
+            return
+        x_min = float(np.nanmin(finite))
+        x_max = float(np.nanmax(finite))
+        if x_max < x_min:
+            x_min, x_max = x_max, x_min
+        for box in (
+            self.widget.doubleSpinBox_Background_ROI_min,
+            self.widget.doubleSpinBox_Background_ROI_max,
+        ):
+            box.blockSignals(True)
+            box.setMinimum(x_min)
+            box.setMaximum(x_max)
+            box.setDecimals(3)
+            box.blockSignals(False)
+        cur_min = float(self.widget.doubleSpinBox_Background_ROI_min.value())
+        cur_max = float(self.widget.doubleSpinBox_Background_ROI_max.value())
+        if force_full_range or (cur_min < x_min) or (cur_min > x_max):
+            cur_min = x_min
+        if force_full_range or (cur_max < x_min) or (cur_max > x_max):
+            cur_max = x_max
+        if cur_max < cur_min:
+            cur_min, cur_max = x_min, x_max
+        self.widget.doubleSpinBox_Background_ROI_min.blockSignals(True)
+        self.widget.doubleSpinBox_Background_ROI_max.blockSignals(True)
+        self.widget.doubleSpinBox_Background_ROI_min.setValue(cur_min)
+        self.widget.doubleSpinBox_Background_ROI_max.setValue(cur_max)
+        self.widget.doubleSpinBox_Background_ROI_min.blockSignals(False)
+        self.widget.doubleSpinBox_Background_ROI_max.blockSignals(False)
+
+    def _get_background_fit_source_xy(self, x_data, y_data):
+        x_arr = np.asarray(x_data, dtype=float)
+        y_arr = np.asarray(y_data, dtype=float)
+        if (self.plot_ctrl is not None) and \
+                bool(getattr(self.plot_ctrl, "_smoothing_active", lambda: False)()):
+            try:
+                return self.plot_ctrl._get_smoothed_pattern_xy(x_arr, y_arr)
+            except Exception:
+                pass
+        return x_arr, y_arr
+
+    def _get_explicit_background_fit_areas(self):
+        areas = []
+        table = getattr(self.widget, "tableWidget_BackgroundConstraints", None)
+        if table is not None:
+            for row in range(table.rowCount()):
+                item_min = table.item(row, 0)
+                item_max = table.item(row, 1)
+                if item_min is None or item_max is None:
+                    continue
+                try:
+                    xmin = float(item_min.text())
+                    xmax = float(item_max.text())
+                except Exception:
+                    continue
+                if xmax < xmin:
+                    xmin, xmax = xmax, xmin
+                areas.append([xmin, xmax])
+        return areas
+
+    def get_background_fit_areas(self):
+        areas = self._get_explicit_background_fit_areas()
+        if areas:
+            return areas
+        return [[
+            float(self.widget.doubleSpinBox_Background_ROI_min.value()),
+            float(self.widget.doubleSpinBox_Background_ROI_max.value()),
+        ]]
+
+    def set_background_fit_areas(self, areas):
+        table = getattr(self.widget, "tableWidget_BackgroundConstraints", None)
+        if table is None:
+            return
+        table.setRowCount(0)
+        normalized = []
+        for area in (areas or []):
+            try:
+                xmin = float(area[0])
+                xmax = float(area[1])
+            except Exception:
+                continue
+            if xmax < xmin:
+                xmin, xmax = xmax, xmin
+            normalized.append([xmin, xmax])
+        normalized.sort(key=lambda area: area[0])
+        for xmin, xmax in normalized:
+            row = table.rowCount()
+            table.insertRow(row)
+            table.setItem(row, 0, QtWidgets.QTableWidgetItem(f"{xmin:.3f}"))
+            table.setItem(row, 1, QtWidgets.QTableWidgetItem(f"{xmax:.3f}"))
+
+    def append_background_fit_area(self, xmin, xmax):
+        table = getattr(self.widget, "tableWidget_BackgroundConstraints", None)
+        if table is None:
+            return
+        xmin = float(xmin)
+        xmax = float(xmax)
+        if xmax < xmin:
+            xmin, xmax = xmax, xmin
+        if abs(xmax - xmin) < 1.0e-9:
+            return
+        for area in self._get_explicit_background_fit_areas():
+            if abs(area[0] - xmin) < 1.0e-6 and abs(area[1] - xmax) < 1.0e-6:
+                return
+        row = table.rowCount()
+        table.insertRow(row)
+        item_min = QtWidgets.QTableWidgetItem(f"{xmin:.3f}")
+        item_max = QtWidgets.QTableWidgetItem(f"{xmax:.3f}")
+        table.setItem(row, 0, item_min)
+        table.setItem(row, 1, item_max)
+        table.sortItems(0)
+
+    def add_background_area_from_inputs(self):
+        xmin = float(self.widget.doubleSpinBox_Background_ROI_min.value())
+        xmax = float(self.widget.doubleSpinBox_Background_ROI_max.value())
+        self.append_background_fit_area(xmin, xmax)
+        self.plot_ctrl.update()
+
+    def toggle_background_area_selector(self, checked):
+        if checked:
+            self.activate_background_area_selector()
+        else:
+            self.deactivate_background_area_selector()
+
+    def activate_background_area_selector(self):
+        if not self.model.base_ptn_exist():
+            if hasattr(self.widget, "pushButton_BGAreaAdd"):
+                self.widget.pushButton_BGAreaAdd.blockSignals(True)
+                self.widget.pushButton_BGAreaAdd.setChecked(False)
+                self.widget.pushButton_BGAreaAdd.blockSignals(False)
+            return
+        ax = getattr(self.widget.mpl.canvas, "ax_pattern", None)
+        if ax is None:
+            return
+        self.deactivate_background_area_selector()
+        toolbar = getattr(self.widget.mpl.canvas, "toolbar", None)
+        if toolbar is not None:
+            try:
+                if getattr(toolbar, "mode", "") == 'zoom rect':
+                    toolbar.zoom()
+                elif getattr(toolbar, "mode", "") == 'pan/zoom':
+                    toolbar.pan()
+            except Exception:
+                pass
+        self._bg_area_selector = RectangleSelector(
+            ax,
+            self._on_background_area_selected,
+            useblit=True,
+            button=[1],
+            interactive=False,
+            drag_from_anywhere=False,
+            spancoords="data",
+            minspanx=1.0e-6,
+        )
+        try:
+            self.widget.mpl.canvas.setCursor(QtCore.Qt.CrossCursor)
+        except Exception:
+            pass
+        self.plot_ctrl.update()
+
+    def deactivate_background_area_selector(self):
+        if self._bg_area_selector is not None:
+            try:
+                self._bg_area_selector.set_active(False)
+            except Exception:
+                pass
+            self._bg_area_selector = None
+        try:
+            self.widget.mpl.canvas.unsetCursor()
+        except Exception:
+            pass
+        if hasattr(self.widget, "pushButton_BGAreaAdd"):
+            self.widget.pushButton_BGAreaAdd.blockSignals(True)
+            self.widget.pushButton_BGAreaAdd.setChecked(False)
+            self.widget.pushButton_BGAreaAdd.blockSignals(False)
+
+    def _on_background_area_selected(self, eclick, erelease):
+        ax = getattr(self.widget.mpl.canvas, "ax_pattern", None)
+        if ax is None:
+            self.deactivate_background_area_selector()
+            return
+        try:
+            x0, __ = ax.transData.inverted().transform((float(eclick.x), float(eclick.y)))
+            x1, __ = ax.transData.inverted().transform((float(erelease.x), float(erelease.y)))
+        except Exception:
+            x0 = eclick.xdata
+            x1 = erelease.xdata
+        if (x0 is None) or (x1 is None):
+            self.deactivate_background_area_selector()
+            return
+        xmin = min(float(x0), float(x1))
+        xmax = max(float(x0), float(x1))
+        if xmax <= xmin:
+            self.deactivate_background_area_selector()
+            return
+        self.widget.doubleSpinBox_Background_ROI_min.setValue(xmin)
+        self.widget.doubleSpinBox_Background_ROI_max.setValue(xmax)
+        self.append_background_fit_area(xmin, xmax)
+        self.plot_ctrl.update()
+        self.deactivate_background_area_selector()
+
+    def remove_selected_background_area(self):
+        table = getattr(self.widget, "tableWidget_BackgroundConstraints", None)
+        if table is None:
+            return
+        row = table.currentRow()
+        if row < 0:
+            return
+        table.removeRow(row)
+        self.plot_ctrl.update()
+
+    def clear_background_areas(self):
+        table = getattr(self.widget, "tableWidget_BackgroundConstraints", None)
+        if table is None:
+            return
+        table.setRowCount(0)
+        self.plot_ctrl.update()
 
     def apply_pt_to_graph(self):
         """
@@ -1309,7 +1651,7 @@ class MainController(object):
 
     def _goto_dpp_next_file(self, move):
         def _session_manifest_for(data_file):
-            param_dir = get_temp_dir(data_file, branch='-param')
+            param_dir = get_temp_dir(data_file, branch='-rampo')
             return os.path.join(param_dir, "rampo_manifest.json")
 
         filelist_chi = self._get_spectrum_filelist()

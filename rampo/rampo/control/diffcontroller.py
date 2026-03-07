@@ -6,6 +6,7 @@ from scipy.interpolate import interp1d
 from ..model import PeakPoModel8
 from ..model.diff_state import DiffState
 from ..model.param_session_io import load_model_from_param
+from ..ds_ramspec import Spectrum
 from ..utils import readchi, writechi, get_temp_dir
 
 
@@ -48,6 +49,7 @@ class DiffController(object):
         self._in_ref_reload = False
         self._ref2d_sort_cache = {}
         self._ref2d_interp_cache = {}
+        self._ref_spectrum = None
         if not hasattr(self.model, "diff_state") or (self.model.diff_state is None):
             self.model.diff_state = DiffState()
         self._connect_channel()
@@ -184,6 +186,7 @@ class DiffController(object):
         self.widget.lineEdit_DiffRefChi.setText("")
         self.model.diff_state.ref_chi_path = ""
         self.model.diff_state.clear_reference_data()
+        self._ref_spectrum = None
         self._clear_interp_cache()
         self.model.diff_state.enabled = False
         self._set_enabled_ui(False)
@@ -341,6 +344,7 @@ class DiffController(object):
         self._clear_interp_cache()
         ref_path = str(st.ref_chi_path or "")
         st.clear_reference_data()
+        self._ref_spectrum = None
         if ref_path == "":
             self._refresh_toggle_enabled_state()
             self._in_ref_reload = False
@@ -350,23 +354,33 @@ class DiffController(object):
                 QtWidgets.QMessageBox.warning(
                     self.widget,
                     "Reference Not Found",
-                    "Reference CHI file was not found:\n" + ref_path,
+                    "Reference spectrum file was not found:\n" + ref_path,
                 )
             self._refresh_toggle_enabled_state()
             self._in_ref_reload = False
             return
 
         try:
-            __, __, x_ref, y_ref = readchi(ref_path)
+            ref_spectrum = Spectrum(ref_path)
+            if str(ref_path).lower().endswith(".spe"):
+                ref_spectrum.apply_excitation_wavelength(
+                    float(self.widget.doubleSpinBox_SetWavelength.value()))
+                if hasattr(self.widget, "spinBox_CCDRowMin") and hasattr(self.widget, "spinBox_CCDRowMax"):
+                    ref_spectrum.set_spe_row_roi(
+                        int(self.widget.spinBox_CCDRowMin.value()),
+                        int(self.widget.spinBox_CCDRowMax.value()))
+            x_ref, y_ref = ref_spectrum.get_raw()
             st.ref_x = np.asarray(x_ref, dtype=float)
             st.ref_y = np.asarray(y_ref, dtype=float)
+            self._ref_spectrum = ref_spectrum
         except Exception as exc:
             st.clear_reference_data()
+            self._ref_spectrum = None
             if show_errors:
                 QtWidgets.QMessageBox.warning(
                     self.widget,
                     "Reference Load Failed",
-                    "Failed to read reference CHI:\n{}\n\n{}".format(ref_path, str(exc)),
+                    "Failed to read reference spectrum:\n{}\n\n{}".format(ref_path, str(exc)),
                 )
             self._refresh_toggle_enabled_state()
             self._in_ref_reload = False
@@ -433,17 +447,73 @@ class DiffController(object):
             except Exception:
                 pass
 
-    def _prepare_ref_1d(self, x_target):
+    def _current_sample_curve(self):
+        if not self.model.base_ptn_exist():
+            return None, None
+        if self.widget.checkBox_BgSub.isChecked():
+            return self.model.base_ptn.get_bgsub()
+        return self.model.base_ptn.get_raw()
+
+    def _curve_matches(self, x_a, y_a, x_b, y_b):
+        try:
+            x_a = np.asarray(x_a, dtype=float)
+            y_a = np.asarray(y_a, dtype=float)
+            x_b = np.asarray(x_b, dtype=float)
+            y_b = np.asarray(y_b, dtype=float)
+        except Exception:
+            return False
+        if x_a.shape != x_b.shape or y_a.shape != y_b.shape:
+            return False
+        return np.allclose(x_a, x_b, rtol=1.0e-8, atol=1.0e-10, equal_nan=True) and \
+            np.allclose(y_a, y_b, rtol=1.0e-8, atol=1.0e-10, equal_nan=True)
+
+    def _build_processed_reference_curve(self):
         st = self.model.diff_state
-        if not st.has_ref_1d():
+        if self._ref_spectrum is None:
             if st.ref_chi_path not in (None, ""):
                 self._reload_reference_data(show_errors=False)
-        if not st.has_ref_1d():
+        ref_spec = self._ref_spectrum
+        if ref_spec is None:
+            return None, None
+        if str(st.ref_chi_path or "").lower().endswith(".spe"):
+            ref_spec.apply_excitation_wavelength(
+                float(self.widget.doubleSpinBox_SetWavelength.value()))
+            if hasattr(self.widget, "spinBox_CCDRowMin") and hasattr(self.widget, "spinBox_CCDRowMax"):
+                ref_spec.set_spe_row_roi(
+                    int(self.widget.spinBox_CCDRowMin.value()),
+                    int(self.widget.spinBox_CCDRowMax.value()))
+        x_ref, y_ref = ref_spec.get_raw()
+        if x_ref is None or y_ref is None:
+            return None, None
+        x_ref = np.asarray(x_ref, dtype=float)
+        y_ref = np.asarray(y_ref, dtype=float)
+        if self.widget.checkBox_BgSub.isChecked():
+            roi_min = float(self.widget.doubleSpinBox_Background_ROI_min.value())
+            roi_max = float(self.widget.doubleSpinBox_Background_ROI_max.value())
+            poly_order = int(self.widget.spinBox_BGParam1.value())
+            if x_ref.size > 0:
+                roi_min = max(float(np.nanmin(x_ref)), roi_min)
+                roi_max = min(float(np.nanmax(x_ref)), roi_max)
+                if roi_max <= roi_min:
+                    roi_min = float(np.nanmin(x_ref))
+                    roi_max = float(np.nanmax(x_ref))
+            ref_spec.get_chbg([roi_min, roi_max], [poly_order], yshift=0)
+            x_ref, y_ref = ref_spec.get_bgsub()
+        return np.asarray(x_ref, dtype=float), np.asarray(y_ref, dtype=float)
+
+    def _prepare_ref_1d(self, x_target, smooth=False):
+        x_ref, y_ref = self._build_processed_reference_curve()
+        if x_ref is None or y_ref is None:
             return None
-        xr = np.asarray(st.ref_x, dtype=float)
-        yr = np.asarray(st.ref_y, dtype=float)
+        xr = np.asarray(x_ref, dtype=float)
+        yr = np.asarray(y_ref, dtype=float)
         if xr.size < 2:
             return None
+        if smooth and (self.plot_ctrl is not None):
+            try:
+                xr, yr = self.plot_ctrl._get_smoothed_pattern_xy(xr, yr)
+            except Exception:
+                pass
         order = np.argsort(xr)
         xr = xr[order]
         yr = yr[order]
@@ -455,11 +525,18 @@ class DiffController(object):
             x = np.asarray(x_cur, dtype=float)
             y = np.asarray(y_cur, dtype=float)
             return x, y
-        # In Diff mode, always use raw pattern regardless of Bg checkbox.
-        x_raw, y_raw = self.model.base_ptn.get_raw()
-        x = np.asarray(x_raw, dtype=float)
-        y = np.asarray(y_raw, dtype=float)
-        y_ref = self._prepare_ref_1d(x)
+        x = np.asarray(x_cur, dtype=float)
+        y = np.asarray(y_cur, dtype=float)
+        smooth_ref = False
+        if self.plot_ctrl is not None:
+            sample_x, sample_y = self._current_sample_curve()
+            if sample_x is not None and sample_y is not None:
+                try:
+                    sm_x, sm_y = self.plot_ctrl._get_smoothed_pattern_xy(sample_x, sample_y)
+                    smooth_ref = self._curve_matches(x, y, sm_x, sm_y)
+                except Exception:
+                    smooth_ref = False
+        y_ref = self._prepare_ref_1d(x, smooth=smooth_ref)
         if y_ref is None:
             return x, y
         return x, y - y_ref
@@ -563,7 +640,7 @@ class DiffController(object):
         if (x_out is None) or (y_out is None):
             QtWidgets.QMessageBox.warning(self.widget, "Warning", "No diff data to export.")
             return
-        param_dir = get_temp_dir(self.model.get_base_ptn_filename(), branch="-param")
+        param_dir = get_temp_dir(self.model.get_base_ptn_filename(), branch="-rampo")
         os.makedirs(param_dir, exist_ok=True)
         base_name = "diff_" + os.path.splitext(os.path.basename(self.model.base_ptn.fname))[0] + ".chi"
         default_path = os.path.join(param_dir, base_name)
@@ -590,7 +667,7 @@ class DiffController(object):
         if int_out is None:
             QtWidgets.QMessageBox.warning(self.widget, "Warning", "No diff cake data to export.")
             return
-        param_dir = get_temp_dir(self.model.get_base_ptn_filename(), branch="-param")
+        param_dir = get_temp_dir(self.model.get_base_ptn_filename(), branch="-rampo")
         os.makedirs(param_dir, exist_ok=True)
         base_name = "diff_" + os.path.splitext(os.path.basename(self.model.base_ptn.fname))[0] + "_cake.npy"
         default_path = os.path.join(param_dir, base_name)

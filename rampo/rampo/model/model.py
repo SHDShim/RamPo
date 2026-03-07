@@ -273,6 +273,8 @@ class PeakPoModel(object):
         pattern = PatternPeakPo()
         pattern.read_file(filename)
         pattern.wavelength = wavelength
+        if hasattr(pattern, "apply_excitation_wavelength"):
+            pattern.apply_excitation_wavelength(wavelength)
         pattern.display = False
         if temp_dir is None:
             pattern.get_chbg(bg_roi, params=bg_params, yshift=0)
@@ -293,6 +295,8 @@ class PeakPoModel(object):
             pattern = PatternPeakPo()
             pattern.read_file(f)
             pattern.wavelength = wl
+            if hasattr(pattern, "apply_excitation_wavelength"):
+                pattern.apply_excitation_wavelength(wl)
             pattern.display = dp
             if temp_dir is None:
                 pattern.get_chbg(bg_roi, params=bg_params, yshift=0)
@@ -347,6 +351,10 @@ class PeakPoModel(object):
 
     def set_base_ptn_wavelength(self, wavelength):
         self.base_ptn.wavelength = wavelength
+        if hasattr(self.base_ptn, "apply_excitation_wavelength"):
+            self.base_ptn.apply_excitation_wavelength(wavelength)
+        if self.diff_img is not None and hasattr(self.diff_img, "apply_excitation_wavelength"):
+            self.diff_img.apply_excitation_wavelength(wavelength)
 
     def get_base_ptn_filename(self):
         return self.base_ptn.fname
@@ -368,10 +376,14 @@ class PeakPoModel(object):
         if self.base_ptn_exist() and \
                 os.path.splitext(str(self.base_ptn.fname))[1].lower() == ".spe":
             self.diff_img.load(self.base_ptn.fname)
+            if hasattr(self.diff_img, "apply_excitation_wavelength"):
+                self.diff_img.apply_excitation_wavelength(self.base_ptn.wavelength)
             return True
         for filen_toload in self.get_associated_image_candidates():
             if os.path.exists(filen_toload):
                 self.diff_img.load(filen_toload)
+                if hasattr(self.diff_img, "apply_excitation_wavelength"):
+                    self.diff_img.apply_excitation_wavelength(self.base_ptn.wavelength)
                 return True
         return False
 
