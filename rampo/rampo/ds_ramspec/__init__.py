@@ -1,2 +1,2 @@
 from .Spectrum import Spectrum, SpectrumPattern, PatternPeakPo
-from .powdiff import get_DataSection
+from .roiutils import get_data_section

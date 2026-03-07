@@ -938,7 +938,7 @@ class Session(object):
     '''
 
     def __init__(self):
-        self.pattern = None  # diffraction pattern powdiff.Pattern object
+        self.pattern = None  # linked spectrum/pattern object
         self.waterfallpatterns = []  # list of pattern object
         self.wavelength = 0.0  # normal value at GSECARS
         self.pressure = 0.0  # DONOT CHANGE, matches with Qt Designer file

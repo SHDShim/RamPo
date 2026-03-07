@@ -9,11 +9,11 @@ from json import JSONEncoder
 import json
 from ..ds_ccd import DiffImg
 from ..ds_jcpds import JCPDSplt, Session
-from ..ds_ramspec import PatternPeakPo, get_DataSection
+from ..ds_ramspec import PatternPeakPo, get_data_section
 from ..ds_section import Section
 from .diff_state import DiffState
 from ..utils import samefilename, make_filename, change_file_path, \
-    cal_dspacing, extract_extension
+    extract_extension
 
 
 class PeakPoModel(object):
@@ -27,7 +27,6 @@ class PeakPoModel(object):
         self.base_ptn = None
         self.waterfall_ptn = []
         self.jcpds_lst = []
-        self.ucfit_lst = []
         self.diff_img = None
         self.poni = None
         self.session = None
@@ -69,9 +68,9 @@ class PeakPoModel(object):
         return self.section_lst.__len__()
 
     def set_current_section(self, roi):
-        x_section_bg, y_section_bg = get_DataSection(
+        x_section_bg, y_section_bg = get_data_section(
             self.base_ptn.x_bg, self.base_ptn.y_bg, roi)
-        __, y_section_bgsub = get_DataSection(
+        __, y_section_bgsub = get_data_section(
             self.base_ptn.x_bgsub, self.base_ptn.y_bgsub, roi)
         self.current_section.set(x_section_bg, y_section_bgsub, y_section_bg)
 
@@ -145,7 +144,6 @@ class PeakPoModel(object):
         self.saved_pressure = model_r.get_saved_pressure()
         self.saved_temperature = model_r.get_saved_temperature()
         self.poni = model_r.poni
-        self.ucfit_lst = model_r.ucfit_lst
         self.session = model_r.session
         self.jcpds_path = model_r.jcpds_path
         self.chi_path = model_r.chi_path
@@ -166,9 +164,9 @@ class PeakPoModel(object):
         self.section_lst = existing_section_lst + new_section_lst
 
     def get_single_section(self, roi):
-        x_section_bg, y_section_bg = get_DataSection(
+        x_section_bg, y_section_bg = get_data_section(
             self.base_ptn.x_bg, self.base_ptn.y_bg, roi)
-        __, y_section_bgsub = get_DataSection(
+        __, y_section_bgsub = get_data_section(
             self.base_ptn.x_bgsub, self.base_ptn.y_bgsub, roi)
         return x_section_bg, y_section_bgsub, y_section_bg
 
@@ -180,9 +178,6 @@ class PeakPoModel(object):
 
     def reset_jcpds_lst(self):
         self.jcpds_lst[:] = []
-
-    def reset_ucfit_lst(self):
-        self.ucfit_lst[:] = []
 
     def reset_diff_img(self):
         self.diff_img = DiffImg()
@@ -207,12 +202,6 @@ class PeakPoModel(object):
 
     def jcpds_exist(self):
         if self.jcpds_lst == []:
-            return False
-        else:
-            return True
-
-    def ucfit_exist(self):
-        if self.ucfit_lst == []:
             return False
         else:
             return True
@@ -540,7 +529,6 @@ class PeakPoModel8(PeakPoModel):
         self.base_ptn = None
         self.waterfall_ptn = []
         self.jcpds_lst = []
-        self.ucfit_lst = []
         self.diff_img = None
         self.poni = None
         self.session = None
@@ -557,7 +545,6 @@ class PeakPoModel8(PeakPoModel):
         self.base_ptn = model7.base_ptn
         self.waterfall_ptn = model7.waterfall_ptn
         self.jcpds_lst = model7.jcpds_lst
-        self.ucfit_lst = model7.ucfit_lst
         self.diff_img = model7.diff_img
         self.poni = model7.poni
         self.session = model7.session
@@ -574,7 +561,6 @@ class PeakPoModel8(PeakPoModel):
         model7.base_ptn = self.base_ptn
         model7.waterfall_ptn = self.waterfall_ptn
         model7.jcpds_lst = self.jcpds_lst
-        model7.ucfit_lst = self.ucfit_lst
         model7.diff_img = self.diff_img
         model7.poni = self.poni
         model7.session = self.session
@@ -593,8 +579,6 @@ class PeakPoModel8(PeakPoModel):
         write_JSON(self.waterfall_ptn, 'waterfall_ptn', temp_dir)
         # jcpds_list
         write_JSON(self.jcpds_lst, 'jcpds_lst', temp_dir)
-        # ucfit_list
-        write_JSON(self.ucfit_lst, 'ucfit_lst', temp_dir)
         # diff_img
         if self.diff_img != None:
             dict = diffimg_to_dict(self.diff_img)

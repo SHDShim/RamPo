@@ -16,10 +16,8 @@ from .mplcontroller import MplController
 # CCD controller is called in BasePatternController already.
 from .waterfallcontroller import WaterfallController
 from .jcpdscontroller import JcpdsController
-from .ucfitcontroller import UcfitController
 from .waterfalltablecontroller import WaterfallTableController
 from .jcpdstablecontroller import JcpdsTableController
-#from .ucfittablecontroller import UcfitTableController
 from .sessioncontroller import SessionController
 from .diffcontroller import DiffController
 from .peakfitcontroller import PeakFitController
@@ -30,8 +28,7 @@ from .sequencecontroller import SequenceController
 from ..utils import dialog_savefile, writechi, extract_extension, \
     convert_wl_to_energy, get_sorted_filelist, find_from_filelist, \
     make_filename, get_directory, get_temp_dir
-from ..ds_jcpds import UnitCell
-from ..ds_ramspec import get_DataSection
+from ..ds_ramspec import get_data_section
 #from utils import readchi, make_filename, writechi
 
 
@@ -89,9 +86,6 @@ class MainController(object):
         )
         print("  ✓ WaterfallController created")
         
-        self.ucfit_ctrl = UcfitController(self.model, self.widget)
-        print("  ✓ UcfitController created")
-        
         self.jcpds_ctrl = JcpdsController(self.model, self.widget)
         print("  ✓ JcpdsController created")
         
@@ -131,7 +125,6 @@ class MainController(object):
             "session_ctrl",
             "base_spectrum_ctrl",
             "waterfall_ctrl",
-            "ucfit_ctrl",
             "jcpds_ctrl",
             "waterfalltable_ctrl",
             "jcpdstable_ctrl",
@@ -248,10 +241,6 @@ class MainController(object):
             lambda: self.setXEat(660.00))
         self.widget.pushButton_SetXEat42.clicked.connect(
             lambda: self.setXEat(785.00))
-        """
-        self.widget.pushButton_ExportToUCFit.clicked.connect(
-            self.export_to_ucfit)
-        """
         self.widget.pushButton_ImportJlist.clicked.connect(
             self.load_jlist_from_session)
         if hasattr(self.widget, "pushButton_SpectrumRaw"):
@@ -340,10 +329,6 @@ class MainController(object):
             self.apply_changes_to_graph)
         self.widget.pushButton_UpdateJCPDSSteps.clicked.connect(
             self.update_jcpds_table)
-        """
-        self.widget.pushButton_UpdateUCFitSteps.clicked.connect(
-            self.update_ucfit_table)
-        """
         self.widget.pushButton_PrevBasePtn.clicked.connect(
             lambda: self.goto_next_file('previous'))
         self.widget.pushButton_NextBasePtn.clicked.connect(
@@ -441,12 +426,6 @@ class MainController(object):
         step = float(self.widget.doubleSpinBox_JCPDSStep.value())
         self.jcpdstable_ctrl.update_steps_only(step)
 
-    """
-    def update_ucfit_table(self):
-        step = self.widget.doubleSpinBox_UCFitStep.value()
-        self.ucfittable_ctrl.update_steps_only(step)
-    """
-
     def del_temp_chi(self):
         reply = QtWidgets.QMessageBox.question(
             self.widget, 'Message',
@@ -520,47 +499,6 @@ class MainController(object):
         QtWidgets.QMessageBox.information(
             self.widget, "JSON Only",
             "Legacy session import is removed. Load RAPO entries from the current JSON session folder instead.")
-
-    """
-    def export_to_ucfit(self):
-        if not self.model.jcpds_exist():
-            return
-        idx_checked = [
-            s.row() for s in self.widget.tableWidget_JCPDS.selectionModel().
-            selectedRows()]
-
-        if idx_checked == []:
-            QtWidgets.QMessageBox.warning(
-                self.widget, "Warning",
-                "Highlight the name of JCPDS to export")
-            return
-        i = 0
-        for j in range(idx_checked.__len__()):
-            if self.model.jcpds_lst[idx_checked[j]].symmetry != 'nosymmetry':
-                phase = UnitCell()
-                phase.name = self.model.jcpds_lst[idx_checked[j]].name
-                phase.color = self.model.jcpds_lst[idx_checked[j]].color
-                phase.symmetry = self.model.jcpds_lst[idx_checked[j]].symmetry
-                phase.a = self.model.jcpds_lst[idx_checked[j]].a
-                phase.b = self.model.jcpds_lst[idx_checked[j]].b
-                phase.c = self.model.jcpds_lst[idx_checked[j]].c
-                phase.alpha = self.model.jcpds_lst[idx_checked[j]].alpha
-                phase.beta = self.model.jcpds_lst[idx_checked[j]].beta
-                phase.gamma = self.model.jcpds_lst[idx_checked[j]].gamma
-                phase.v = self.model.jcpds_lst[idx_checked[j]].v
-                phase.DiffLines = \
-                    self.model.jcpds_lst[idx_checked[j]].DiffLines
-                self.model.ucfit_lst.append(phase)
-                i += 1
-            else:
-                QtWidgets.QMessageBox.warning(
-                    self.widget, "Warning",
-                    "You cannot send a jcpds without symmetry.")
-        # self.ucfittable_ctrl.update()
-        self.jcpdstable_ctrl.update()
-        self.plot_ctrl.update()
-        return
-    """
 
     def save_bgsubchi(self):
         """
@@ -947,7 +885,7 @@ class MainController(object):
                 x, y = self.model.base_ptn.get_bgsub()
             else:
                 x, y = self.model.base_ptn.get_raw()
-            xroi, yroi = get_DataSection(x, y, [lims[0], lims[1]])
+            xroi, yroi = get_data_section(x, y, [lims[0], lims[1]])
             self.plot_ctrl.update([lims[0], lims[1], yroi.min(), yroi.max()])
         else:
             key_press_handler(event, self.widget.mpl.canvas,
@@ -1484,11 +1422,7 @@ class MainController(object):
         for phase in self.model.jcpds_lst:
             if phase.display:
                 jcount += 1
-        ucount = 0
-        for phase in self.model.ucfit_lst:
-            if phase.display:
-                ucount += 1
-        if (jcount + ucount) == 0:
+        if jcount == 0:
             return ''
         if jcount != 0:
             idx_j = []
@@ -1513,66 +1447,14 @@ class MainController(object):
                     dsp_j.append(j.DiffLines[i].dsp)
                     int_j.append(j.DiffLines[i].intensity)
                     names_j.append(j.name)
-        if ucount != 0:
-            idx_u = []
-            diff_u = []
-            tth_u = []
-            h_u = []
-            k_u = []
-            l_u = []
-            names_u = []
-            dsp_u = []
-            int_u = []
-            for u in self.model.ucfit_lst:
-                if u.display:
-                    i, d, t = u.find_DiffLine(
-                        x, self.widget.doubleSpinBox_SetWavelength.value())
-                    idx_u.append(i)
-                    diff_u.append(d)
-                    tth_u.append(t)
-                    h_u.append(u.DiffLines[i].h)
-                    k_u.append(u.DiffLines[i].k)
-                    l_u.append(u.DiffLines[i].l)
-                    dsp_u.append(u.DiffLines[i].dsp)
-                    int_u.append(u.DiffLines[i].intensity)
-                    names_u.append(u.name)
-        if (jcount != 0) and (ucount == 0):
-            idx_min = diff_j.index(min(diff_j))
-            tth_min = tth_j[idx_min]
-            dsp_min = dsp_j[idx_min]
-            int_min = int_j[idx_min]
-            h_min = h_j[idx_min]
-            k_min = k_j[idx_min]
-            l_min = l_j[idx_min]
-            name_min = names_j[idx_min]
-        elif (jcount == 0) and (ucount != 0):
-            idx_min = diff_u.index(min(diff_u))
-            tth_min = tth_u[idx_min]
-            dsp_min = dsp_u[idx_min]
-            int_min = int_u[idx_min]
-            h_min = h_u[idx_min]
-            k_min = k_u[idx_min]
-            l_min = l_u[idx_min]
-            name_min = names_u[idx_min]
-        else:
-            if min(diff_j) <= min(diff_u):
-                idx_min = diff_j.index(min(diff_j))
-                tth_min = tth_j[idx_min]
-                dsp_min = dsp_j[idx_min]
-                int_min = int_j[idx_min]
-                h_min = h_j[idx_min]
-                k_min = k_j[idx_min]
-                l_min = l_j[idx_min]
-                name_min = names_j[idx_min]
-            else:
-                idx_min = diff_u.index(min(diff_u))
-                tth_min = tth_u[idx_min]
-                dsp_min = dsp_u[idx_min]
-                int_min = int_u[idx_min]
-                h_min = h_u[idx_min]
-                k_min = k_u[idx_min]
-                l_min = l_u[idx_min]
-                name_min = names_u[idx_min]
+        idx_min = diff_j.index(min(diff_j))
+        tth_min = tth_j[idx_min]
+        dsp_min = dsp_j[idx_min]
+        int_min = int_j[idx_min]
+        h_min = h_j[idx_min]
+        k_min = k_j[idx_min]
+        l_min = l_j[idx_min]
+        name_min = names_j[idx_min]
         line1 = '2\u03B8 = {0:.4f} \u00B0, d-sp = {1:.4f} \u212B'.format(
             float(tth_min), float(dsp_min))
         line2 = 'intensity = {0: .0f}, hkl = {1: .0f} {2: .0f} {3: .0f}'.\

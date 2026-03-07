@@ -284,56 +284,6 @@ class MplController(object):
             smooth = ma.masked_where(ma.getmaskarray(data_arr), smooth, copy=False)
         return smooth, x_arr
 
-
-    
-    """
-    def _plot_ucfit(self):
-        i = 0
-        for j in self.model.ucfit_lst:
-            if j.display:
-                i += 1
-        if i == 0:
-            return
-        axisrange = self.widget.mpl.canvas.ax_pattern.axis()
-        bar_scale = 1. / 100. * axisrange[3]
-        i = 0
-        for phase in self.model.ucfit_lst:
-            if phase.display:
-                try:
-                    phase.cal_dsp()
-                except:
-                    QtWidgets.QMessageBox.warning(
-                        self.widget, "Warning",
-                        phase.name+" created issues with pressure calculation.")
-                    break
-                tth, inten = phase.get_tthVSint(
-                    self.widget.doubleSpinBox_SetWavelength.value())
-                bar_min = np.ones(tth.shape) * axisrange[2]
-                intensity = inten
-                bar_min = np.ones(tth.shape) * axisrange[2]
-                self.widget.tableWidget_UnitCell.removeCellWidget(i, 3)
-                Item4 = QtWidgets.QTableWidgetItem(
-                    "{:.3f}".format(float(phase.v)))
-                Item4.setFlags(
-                    QtCore.Qt.ItemIsSelectable | QtCore.Qt.ItemIsEnabled)
-                self.widget.tableWidget_UnitCell.setItem(i, 3, Item4)
-                if self.widget.checkBox_Intensity.isChecked():
-                    self.widget.mpl.canvas.ax_pattern.vlines(
-                        tth, bar_min, intensity * bar_scale,
-                        colors=phase.color,
-                        lw=float(
-                            self.widget.comboBox_PtnJCPDSBarThickness.
-                            currentText()))
-                else:
-                    self.widget.mpl.canvas.ax_pattern.vlines(
-                        tth, bar_min, 100. * bar_scale,
-                        colors=phase.color,
-                        lw=float(
-                            self.widget.comboBox_PtnJCPDSBarThickness.
-                            currentText()))
-            i += 1
-    """
-
     def _plot_cake(self):
         """
         Controls cake viewing as well as mask

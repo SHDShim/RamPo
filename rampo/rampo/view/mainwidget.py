@@ -193,6 +193,22 @@ class MainWindow(QtWidgets.QMainWindow, Ui_MainWindow):
             self.groupBox_12.setVisible(False)
         if hasattr(self, "pushButton_SaveBgSubCHI"):
             self.pushButton_SaveBgSubCHI.setVisible(False)
+        for name in (
+            "groupBox_15",
+            "tableWidget_UnitCell",
+            "plainTextEdit_UCFitOutput",
+            "pushButton_PerformUCFit",
+            "comboBox_Symmetry",
+            "comboBox_PeakFitLabels",
+            "pushButton_ExportToUCFit",
+            "pushButton_UpdateUCFitSteps",
+            "doubleSpinBox_UCFitStep",
+            "pushButton_SetUCFitStepTo0_01",
+            "pushButton_SetUCFitStepTo0_001",
+            "pushButton_SetUCFitStepTo0_0001",
+        ):
+            if hasattr(self, name):
+                getattr(self, name).setVisible(False)
         if hasattr(self, "pushButton_ApplyCakeView"):
             self.pushButton_ApplyCakeView.setVisible(False)
         if hasattr(self, "pushButton_ApplyWaterfallChange"):
@@ -1485,14 +1501,6 @@ class MainWindow(QtWidgets.QMainWindow, Ui_MainWindow):
             lambda: self.set_q_tstep(1000))
         self.doubleSpinBox_PStep.valueChanged.connect(self.set_pstep)
         self.spinBox_TStep.valueChanged.connect(self.set_tstep)
-        """
-        self.pushButton_SetUCFitStepTo0_01.clicked.connect(
-            lambda: self.set_ustep(0.01))
-        self.pushButton_SetUCFitStepTo0_001.clicked.connect(
-            lambda: self.set_ustep(0.001))
-        self.pushButton_SetUCFitStepTo0_0001.clicked.connect(
-            lambda: self.set_ustep(0.0001))
-        """
         self.pushButton_SetJCPDSStepTo0001.clicked.connect(
             lambda: self.set_jstep(0.001))
         self.pushButton_SetJCPDSStepTo001.clicked.connect(
@@ -1501,11 +1509,6 @@ class MainWindow(QtWidgets.QMainWindow, Ui_MainWindow):
             lambda: self.set_jstep(0.1))
         self.pushButton_AboutPeakpo.clicked.connect(self.about)
         self.pushButton_Help.clicked.connect(self.shortcutkeys)
-
-    """
-    def set_ustep(self, value):
-        self.doubleSpinBox_UCFitStep.setValue(value)
-    """
 
     def set_jstep(self, value):
         self.doubleSpinBox_JCPDSStep.setValue(value)

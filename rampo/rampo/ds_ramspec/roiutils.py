@@ -8,10 +8,8 @@ Created on Sun Jan 18 08:31:09 2015
 import numpy as np
 
 
-def get_DataSection(x, y, roi):
-    """
-    return a section for viewing and processing
-    """
+def get_data_section(x, y, roi):
+    """Return the x/y section bounded by the requested ROI."""
     r0, r1 = float(roi[0]), float(roi[1])
     if r0 > r1:
         r0, r1 = r1, r0
