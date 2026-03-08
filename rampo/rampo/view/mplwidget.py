@@ -24,15 +24,18 @@ class MplCanvas(FigureCanvasQTAgg):
             hspace=0.0,
         )
 
-        self.bgColor = "black"
-        self.objColor = "white"
+        self.bgColor = "#1e1f22"
+        self.objColor = "#f0f0f0"
+        self.gridColor = "#43464d"
+        self.spineColor = "#c9c9c9"
+        self.figureColor = "#2b2d31"
         self._define_axes(1)
 
         try:
             mplstyle.use("dark_background")
         except Exception:
             pass
-        self.fig.set_facecolor(self.bgColor)
+        self._style_axes()
 
         super().__init__(self.fig)
         self.setSizePolicy(QtWidgets.QSizePolicy.Expanding, QtWidgets.QSizePolicy.Expanding)
@@ -45,6 +48,24 @@ class MplCanvas(FigureCanvasQTAgg):
         self.ax_pattern.set_ylabel("Intensity (arbitrary unit)")
         self.ax_pattern.ticklabel_format(axis="y", style="sci", scilimits=(-2, 2))
         self.ax_pattern.get_yaxis().get_offset_text().set_position((-0.04, -0.1))
+        self._style_axes()
+
+    def _style_axis(self, axis):
+        axis.set_facecolor(self.bgColor)
+        axis.grid(True, color=self.gridColor, alpha=0.35, linewidth=0.6)
+        axis.tick_params(colors=self.objColor)
+        axis.xaxis.label.set_color(self.objColor)
+        axis.yaxis.label.set_color(self.objColor)
+        axis.title.set_color(self.objColor)
+        axis.yaxis.get_offset_text().set_color(self.objColor)
+        for spine in axis.spines.values():
+            spine.set_color(self.spineColor)
+
+    def _style_axes(self):
+        self.fig.set_facecolor(self.figureColor)
+        self.fig.set_edgecolor(self.figureColor)
+        for axis in (self.ax_pattern, self.ax_cake):
+            self._style_axis(axis)
 
     def resize_axes(self, h_cake):
         self.fig.clf()
@@ -57,6 +78,7 @@ class MplCanvas(FigureCanvasQTAgg):
             self.ax_cake.spines["bottom"].set_visible(False)
         elif h_cake >= 10:
             self.ax_cake.set_ylabel("Azimuth (degrees)")
+        self._style_axes()
 
     def set_toNight(self, NightView=True):
         if NightView:
@@ -64,8 +86,11 @@ class MplCanvas(FigureCanvasQTAgg):
                 mplstyle.use("dark_background")
             except Exception:
                 pass
-            self.bgColor = "black"
-            self.objColor = "white"
+            self.bgColor = "#1e1f22"
+            self.objColor = "#f0f0f0"
+            self.gridColor = "#43464d"
+            self.spineColor = "#c9c9c9"
+            self.figureColor = "#2b2d31"
         else:
             try:
                 mplstyle.use("classic")
@@ -73,8 +98,11 @@ class MplCanvas(FigureCanvasQTAgg):
                 pass
             self.bgColor = "white"
             self.objColor = "black"
+            self.gridColor = "#a8adb8"
+            self.spineColor = "#606060"
+            self.figureColor = "white"
 
-        self.fig.set_facecolor(self.bgColor)
+        self._style_axes()
         self.ax_cake.tick_params(
             which="both",
             axis="x",
@@ -103,7 +131,12 @@ class MplWidget(QtWidgets.QWidget):
         self.canvas.setFocus()
 
         self.vbl = QtWidgets.QVBoxLayout()
+        self.vbl.setContentsMargins(0, 0, 0, 0)
+        self.vbl.setSpacing(0)
         self.ntb = NavigationToolbar(self.canvas, self)
+        self.setStyleSheet("MplWidget, QWidget { border: 0px; }")
+        self.canvas.setStyleSheet("border: 0px;")
+        self.ntb.setStyleSheet("border: 0px;")
         self.vbl.addWidget(self.ntb)
         self.vbl.addWidget(self.canvas)
         self.setLayout(self.vbl)

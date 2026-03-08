@@ -37,6 +37,8 @@ class MainController(object):
     def __init__(self):
         self._shutdown_done = False
         self._defer_plot_update_count = 0
+        self._peak_pick_press_x = None
+        self._peak_pick_preview = None
 
         self.widget = MainWindow()
         self.widget._main_controller = self
@@ -183,6 +185,10 @@ class MainController(object):
         self.widget.mpl.canvas.mpl_connect(
             'button_press_event', self.deliver_mouse_signal)
         self.widget.mpl.canvas.mpl_connect(
+            'motion_notify_event', self._on_peak_pick_motion)
+        self.widget.mpl.canvas.mpl_connect(
+            'button_release_event', self._on_peak_pick_release)
+        self.widget.mpl.canvas.mpl_connect(
             'key_press_event', self.on_key_press)
         self.widget.doubleSpinBox_Pressure.valueChanged.connect(
             self.apply_pt_to_graph)
@@ -201,6 +207,9 @@ class MainController(object):
         if hasattr(self.widget, "pushButton_BGAreaAdd"):
             self.widget.pushButton_BGAreaAdd.toggled.connect(
                 self.toggle_background_area_selector)
+        if hasattr(self.widget, "pushButton_AddRemoveFromMouse"):
+            self.widget.pushButton_AddRemoveFromMouse.toggled.connect(
+                self._on_peak_picker_toggled)
         if hasattr(self.widget, "pushButton_BGAreaRemove"):
             self.widget.pushButton_BGAreaRemove.clicked.connect(
                 self.remove_selected_background_area)
@@ -927,10 +936,6 @@ class MainController(object):
             return
         if (event.button != 1) and (event.button != 3):
             return
-        if event.button == 1:
-            mouse_button = 'left'
-        elif event.button == 3:
-            mouse_button = 'right'
         fits_active = False
         if hasattr(self.widget, "tab_PkFt"):
             fits_active = (self.widget.tabWidget.currentWidget() == self.widget.tab_PkFt)
@@ -958,11 +963,140 @@ class MainController(object):
             """
             if self.model.current_section.fitted():
                     self.model.current_section.invalidate_fit_result()
-            self.pick_peak(mouse_button, event.xdata, event.ydata)
+            if event.button == 3:
+                self.pick_peak('right', event.xdata, event.ydata)
+                self._reset_peak_pick_gesture()
+                return
+            self._peak_pick_press_x = float(event.xdata)
+            self._update_peak_pick_preview(float(event.xdata))
         else:
             return
 
-    def pick_peak(self, mouse_button, xdata, ydata):
+    def _peak_picker_active(self):
+        if not hasattr(self.widget, "pushButton_AddRemoveFromMouse"):
+            return False
+        if not self.widget.pushButton_AddRemoveFromMouse.isChecked():
+            return False
+        if not hasattr(self.widget, "tab_PkFt"):
+            return False
+        return self.widget.tabWidget.currentWidget() == self.widget.tab_PkFt
+
+    def _on_peak_picker_toggled(self, checked):
+        if checked:
+            toolbar = getattr(self.widget.mpl, "ntb", None)
+            if toolbar is not None:
+                mode = getattr(toolbar, "mode", "") or getattr(toolbar, "_active", "")
+                if mode in ("zoom rect", "ZOOM"):
+                    toolbar.zoom()
+                elif mode in ("pan/zoom", "PAN"):
+                    toolbar.pan()
+        else:
+            self._reset_peak_pick_gesture()
+
+    def _on_peak_pick_motion(self, event):
+        if not self._peak_picker_active():
+            return
+        if event.inaxes != self.widget.mpl.canvas.ax_pattern or event.xdata is None:
+            if self._peak_pick_press_x is None:
+                self._clear_peak_pick_preview()
+            return
+        if not self.model.current_section_exist():
+            return
+        self._update_peak_pick_preview(float(event.xdata))
+
+    def _on_peak_pick_release(self, event):
+        if self._peak_pick_press_x is None:
+            return
+        if not self._peak_picker_active():
+            self._reset_peak_pick_gesture()
+            return
+        x_release = self._peak_pick_press_x if event.xdata is None else float(event.xdata)
+        self.pick_peak('left', x_release, event.ydata, x_press=self._peak_pick_press_x)
+        self._reset_peak_pick_gesture()
+
+    def _clear_peak_pick_preview(self):
+        if self._peak_pick_preview is not None:
+            try:
+                self._peak_pick_preview.remove()
+            except Exception:
+                pass
+            self._peak_pick_preview = None
+            try:
+                self.widget.mpl.canvas.draw_idle()
+            except Exception:
+                pass
+
+    def _reset_peak_pick_gesture(self):
+        self._peak_pick_press_x = None
+        self._clear_peak_pick_preview()
+
+    def _preview_peak_parameters(self, x_current):
+        section = self.model.current_section
+        x_min, x_max = section.get_xrange()
+        default_fwhm = 5.0
+        if self._peak_pick_press_x is None:
+            center = float(np.clip(x_current, x_min, x_max))
+            fwhm = default_fwhm
+        else:
+            x0 = float(np.clip(min(self._peak_pick_press_x, x_current), x_min, x_max))
+            x1 = float(np.clip(max(self._peak_pick_press_x, x_current), x_min, x_max))
+            if abs(x1 - x0) <= 1e-9:
+                center = float(np.clip(x_current, x_min, x_max))
+                fwhm = default_fwhm
+            else:
+                center = 0.5 * (x0 + x1)
+                fwhm = max(x1 - x0, 1e-5)
+        height = self._peak_signal_y(center)
+        amplitude = max(
+            section.pseudo_voigt_height_to_amplitude(height, fwhm, 0.5), 0.0)
+        return center, fwhm, amplitude
+
+    def _peak_signal_y(self, x_value):
+        section = self.model.current_section
+        x = np.asarray(section.x, dtype=float)
+        if x.size == 0:
+            return 0.0
+        y = np.asarray(section.y_bgsub, dtype=float)
+        if not self.widget.checkBox_BgSub.isChecked():
+            y = y + np.asarray(section.y_bg, dtype=float)
+        x_clamped = min(max(float(x_value), float(np.min(x))), float(np.max(x)))
+        return max(float(np.interp(x_clamped, x, y)), 0.0)
+
+    def _preview_peak_curve(self, center, fwhm, amplitude, fraction=0.5):
+        section = self.model.current_section
+        x = np.asarray(section.x, dtype=float)
+        if x.size == 0:
+            return x, np.asarray([], dtype=float)
+        sigma = max(float(fwhm), 1e-5)
+        fraction = min(max(float(fraction), 0.0), 1.0)
+        dx = x - float(center)
+        gaussian_sigma = sigma / np.sqrt(2.0 * np.log(2.0))
+        gaussian = np.exp(-0.5 * np.square(dx / gaussian_sigma))
+        lorentz = 1.0 / (1.0 + np.square(dx / sigma))
+        gaussian_norm = 1.0 / (gaussian_sigma * np.sqrt(2.0 * np.pi))
+        lorentz_norm = 1.0 / (np.pi * sigma)
+        profile = float(amplitude) * (
+            ((1.0 - fraction) * gaussian_norm * gaussian) +
+            (fraction * lorentz_norm * lorentz)
+        )
+        if not self.widget.checkBox_BgSub.isChecked():
+            profile = profile + np.asarray(section.y_bg, dtype=float)
+        return x, profile
+
+    def _update_peak_pick_preview(self, x_current):
+        if not self.model.current_section_exist():
+            return
+        center, fwhm, amplitude = self._preview_peak_parameters(x_current)
+        x_curve, y_curve = self._preview_peak_curve(center, fwhm, amplitude)
+        if x_curve.size == 0 or y_curve.size == 0:
+            return
+        self._clear_peak_pick_preview()
+        ax = self.widget.mpl.canvas.ax_pattern
+        (self._peak_pick_preview,) = ax.plot(
+            x_curve, y_curve, color="#22c55e", linewidth=1.3, linestyle="--")
+        self.widget.mpl.canvas.draw_idle()
+
+    def pick_peak(self, mouse_button, xdata, ydata, x_press=None):
         """
         """
         if mouse_button == 'left':  # left click
@@ -972,19 +1106,34 @@ class MainController(object):
                 QtWidgets.QMessageBox.warning(
                     self.widget, "Warning", "Set section first.")
                 return
-            # Robust against tiny range mismatches: map click to nearest x
-            # sample in the current section and use that as initial center.
             x_arr = np.asarray(self.model.current_section.x, dtype=float)
-            idx = int(np.abs(x_arr - float(xdata)).argmin())
-            x_center = float(x_arr[idx])
+            x_pick = float(xdata)
+            x_start = x_pick if x_press is None else float(x_press)
+            x0 = min(x_start, x_pick)
+            x1 = max(x_start, x_pick)
+            if abs(x1 - x0) <= 1e-9:
+                idx = int(np.abs(x_arr - x_pick).argmin())
+                x_center = float(x_arr[idx])
+                fwhm = 5.0
+            else:
+                idx0 = int(np.abs(x_arr - x0).argmin())
+                idx1 = int(np.abs(x_arr - x1).argmin())
+                x0 = float(x_arr[min(idx0, idx1)])
+                x1 = float(x_arr[max(idx0, idx1)])
+                x_center = 0.5 * (x0 + x1)
+                fwhm = max(x1 - x0, 1e-5)
+            y_center = self._peak_signal_y(x_center)
             success = self.model.current_section.set_single_peak(
                 x_center,
-                self.widget.doubleSpinBox_InitialFWHM.value())
+                fwhm,
+                y_center=y_center)
             if not success:
                 QtWidgets.QMessageBox.warning(
                     self.widget, "Warning",
                     "You picked outside of the current section.")
                 return
+            self.model.current_section.peaks_in_queue[-1]['fraction'] = 0.5
+            self.model.current_section.peaks_in_queue[-1]['fraction_vary'] = True
         elif mouse_button == 'right':  # right button for removal
             if not self.model.current_section.peaks_exist():
                 return

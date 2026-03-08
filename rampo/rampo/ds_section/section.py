@@ -75,8 +75,21 @@ class Section(object):
             None if self.y_bg is None else len(self.y_bg),
         )
 
+    @staticmethod
+    def pseudo_voigt_height_to_amplitude(height, sigma, fraction=0.5):
+        sigma = max(float(sigma), 1e-5)
+        fraction = min(max(float(fraction), 0.0), 1.0)
+        gaussian_sigma = sigma / np.sqrt(2.0 * np.log(2.0))
+        gaussian_norm = 1.0 / (gaussian_sigma * np.sqrt(2.0 * np.pi))
+        lorentz_norm = 1.0 / (np.pi * sigma)
+        peak_scale = ((1.0 - fraction) * gaussian_norm) + \
+            (fraction * lorentz_norm)
+        if peak_scale <= 0.0:
+            return 0.0
+        return float(height) / peak_scale
+
     def set_single_peak(self, x_center, fwhm, hkl=[0, 0, 0],
-                        phase_name='unknown'):
+                        phase_name='unknown', y_center=None):
         if self.x is None or len(self.x) == 0:
             return False
         x_min = float(np.min(self.x))
@@ -90,10 +103,13 @@ class Section(object):
             return False
         # Clamp near-boundary clicks into the valid section range.
         x_center = min(max(float(x_center), x_min), x_max)
-        y_center = self.get_nearest_intensity(x_center)
+        if y_center is None:
+            y_center = self.get_nearest_intensity(x_center)
+        y_center = max(float(y_center), 0.0)
         peak = {}
         peak['center'] = x_center
-        peak['amplitude'] = y_center * fwhm * 4.
+        peak['amplitude'] = self.pseudo_voigt_height_to_amplitude(
+            y_center, fwhm, 0.5)
         peak['sigma'] = fwhm
         peak['fraction'] = 0.5
         peak['center_vary'] = True
@@ -228,6 +244,46 @@ class Section(object):
 
     def get_number_of_peaks_in_queue(self):
         return self.peaks_in_queue.__len__()
+
+    def _queue_peak_profile(self, peak):
+        x = np.asarray(self.x, dtype=float)
+        if x.size == 0:
+            return np.asarray([], dtype=float)
+        center = float(peak['center'])
+        sigma = max(float(peak['sigma']), 1e-5)
+        fraction = min(max(float(peak.get('fraction', 0.5)), 0.0), 1.0)
+        amplitude = max(float(peak['amplitude']), 0.0)
+        dx = x - center
+        gaussian_sigma = sigma / np.sqrt(2.0 * np.log(2.0))
+        gaussian = np.exp(-0.5 * np.square(dx / gaussian_sigma))
+        lorentz = 1.0 / (1.0 + np.square(dx / sigma))
+        gaussian_norm = 1.0 / (gaussian_sigma * np.sqrt(2.0 * np.pi))
+        lorentz_norm = 1.0 / (np.pi * sigma)
+        return amplitude * (
+            ((1.0 - fraction) * gaussian_norm * gaussian) +
+            (fraction * lorentz_norm * lorentz)
+        )
+
+    def get_estimated_profiles(self, bgsub=False):
+        profiles = {}
+        if self.x is None or self.peaks_in_queue == []:
+            return profiles
+        for i, peak in enumerate(self.peaks_in_queue):
+            profile = self._queue_peak_profile(peak)
+            if not bgsub:
+                profile = profile + self.y_bg
+            profiles[f"p{i:d}_"] = profile
+        return profiles
+
+    def get_estimated_total_profile(self, bgsub=False):
+        if self.x is None:
+            return np.asarray([], dtype=float)
+        total = np.zeros_like(np.asarray(self.x, dtype=float), dtype=float)
+        for peak in self.peaks_in_queue:
+            total = total + self._queue_peak_profile(peak)
+        if not bgsub:
+            total = total + self.y_bg
+        return total
 
     def get_individual_profiles(self, bgsub=False):
         """

@@ -768,18 +768,34 @@ class MplController(object):
     def _plot_peakfit(self):
         if not self.model.current_section_exist():
             return
+        bgsub = self.widget.checkBox_BgSub.isChecked()
         if self.model.current_section.peaks_exist():
             for x_c in self.model.current_section.get_peak_positions():
                 self.widget.mpl.canvas.ax_pattern.axvline(
                     x_c, ls='--', dashes=(10, 5))
+            if not self.model.current_section.fitted():
+                x_plot = self.model.current_section.x
+                profiles = self.model.current_section.get_estimated_profiles(
+                    bgsub=bgsub)
+                for key, value in profiles.items():
+                    self.widget.mpl.canvas.ax_pattern.plot(
+                        x_plot, value, ls='--', c='#facc15', lw=float(
+                            self.widget.comboBox_BasePtnLineThickness.
+                            currentText()))
+                total_profile = self.model.current_section.get_estimated_total_profile(
+                    bgsub=bgsub)
+                if len(total_profile) > 0:
+                    self.widget.mpl.canvas.ax_pattern.plot(
+                        x_plot, total_profile, ls='--', c='#60a5fa', lw=float(
+                            self.widget.comboBox_BasePtnLineThickness.
+                            currentText()))
         if self.model.current_section.fitted():
-            bgsub = self.widget.checkBox_BgSub.isChecked()
             x_plot = self.model.current_section.x
             profiles = self.model.current_section.get_individual_profiles(
                 bgsub=bgsub)
             for key, value in profiles.items():
                 self.widget.mpl.canvas.ax_pattern.plot(
-                    x_plot, value, ls='-', c=self.obj_color, lw=float(
+                    x_plot, value, ls='-', c='#facc15', lw=float(
                         self.widget.comboBox_BasePtnLineThickness.
                         currentText()))
             total_profile = self.model.current_section.get_fit_profile(
@@ -794,7 +810,8 @@ class MplController(object):
             #(y_range[1] - y_range[0]) * 1.05
             self.widget.mpl.canvas.ax_pattern.fill_between(
                 x_plot, self.model.current_section.get_fit_residue_baseline(
-                    bgsub=bgsub) + y_shift, residue + y_shift, facecolor='r')
+                    bgsub=bgsub) + y_shift, residue + y_shift, facecolor='r',
+                alpha=0.3)
             """
             self.widget.mpl.canvas.ax_pattern.plot(
                 x_plot, residue + y_shift, 'r-')
@@ -804,6 +821,27 @@ class MplController(object):
             """
         else:
             pass
+
+    def _apply_peakfit_autoy(self, bgsub=False):
+        if (not self._fits_tab_active()) or (not self.model.current_section_exist()):
+            return
+        if not self.widget.checkBox_AutoY.isChecked():
+            return
+        section = self.model.current_section
+        y_low, y_high = section.get_yrange(bgsub=bgsub)
+        if section.fitted():
+            residue = np.asarray(section.get_fit_residue(bgsub=bgsub), dtype=float)
+            y_shift = y_low - (y_high - y_low) * 0.05
+            residue_low = float(np.min(residue + y_shift))
+            residue_high = float(np.max(residue + y_shift))
+            y_low = min(y_low, residue_low)
+            y_high = max(y_high, residue_high)
+        if y_high <= y_low:
+            span = max(abs(y_high), 1.0) * 1.0e-6
+        else:
+            span = y_high - y_low
+        margin = span * 0.05
+        self.widget.mpl.canvas.ax_pattern.set_ylim(y_low - margin, y_high + margin)
 
     def _plot_peakfit_in_gsas_style(self):
         # get all the highlights
@@ -974,6 +1012,9 @@ class MplController(object):
             
             if not self.widget.checkBox_AutoY.isChecked():
                 self.widget.mpl.canvas.ax_pattern.set_ylim(limits[2], limits[3])
+            else:
+                self._apply_peakfit_autoy(
+                    bgsub=self.widget.checkBox_BgSub.isChecked())
             
             # ✅ Check if ax_cake exists before setting ylim
             if hasattr(self.widget.mpl.canvas, 'ax_cake') and (cake_ylimits is not None):

@@ -92,32 +92,30 @@ def excepthook(exc_type, exc_value, traceback_obj):
 
 sys.excepthook = excepthook
 
-dark_palette = QPalette()
-dark_palette.setColor(QPalette.Window, QColor(53, 53, 53))
-dark_palette.setColor(QPalette.WindowText, Qt.white)
-dark_palette.setColor(QPalette.Base, QColor(35, 35, 35))
-dark_palette.setColor(QPalette.AlternateBase, QColor(53, 53, 53))
-dark_palette.setColor(QPalette.ToolTipBase, QColor(25, 25, 25))
-dark_palette.setColor(QPalette.ToolTipText, Qt.white)
+def build_dark_palette():
+    palette = QPalette()
+    palette.setColor(QPalette.Window, QColor(40, 42, 46))
+    palette.setColor(QPalette.WindowText, Qt.white)
+    palette.setColor(QPalette.Base, QColor(26, 28, 31))
+    palette.setColor(QPalette.AlternateBase, QColor(45, 48, 53))
+    palette.setColor(QPalette.ToolTipBase, QColor(26, 28, 31))
+    palette.setColor(QPalette.ToolTipText, Qt.white)
+    palette.setColor(QPalette.Text, Qt.white)
+    palette.setColor(QPalette.Button, QColor(52, 55, 61))
+    palette.setColor(QPalette.ButtonText, Qt.white)
+    palette.setColor(QPalette.BrightText, Qt.red)
+    palette.setColor(QPalette.Link, QColor(88, 166, 255))
+    palette.setColor(QPalette.Highlight, QColor(88, 166, 255))
+    palette.setColor(QPalette.HighlightedText, QColor(20, 20, 20))
+    palette.setColor(QPalette.Active, QPalette.Button, QColor(52, 55, 61))
+    disabled = QColor(130, 130, 130)
+    palette.setColor(QPalette.Disabled, QPalette.ButtonText, disabled)
+    palette.setColor(QPalette.Disabled, QPalette.WindowText, disabled)
+    palette.setColor(QPalette.Disabled, QPalette.Text, disabled)
+    palette.setColor(QPalette.Disabled, QPalette.Light, QColor(52, 55, 61))
+    return palette
 
-if _platform == "darwin":
-    dark_palette.setColor(QPalette.Text, Qt.white)
-else:
-    dark_palette.setColor(QPalette.Text, Qt.darkGray)
-
-dark_palette.setColor(QPalette.Button, QColor(53, 53, 53))
-dark_palette.setColor(QPalette.ButtonText, Qt.white)
-dark_palette.setColor(QPalette.BrightText, Qt.red)
-dark_palette.setColor(QPalette.Link, QColor(42, 130, 218))
-dark_palette.setColor(QPalette.Highlight, QColor(42, 130, 218))
-dark_palette.setColor(QPalette.HighlightedText, QColor(35, 35, 35))
-dark_palette.setColor(QPalette.Active, QPalette.Button, QColor(53, 53, 53))
-dark_palette.setColor(QPalette.Disabled, QPalette.ButtonText, Qt.darkGray)
-dark_palette.setColor(QPalette.Disabled, QPalette.WindowText, Qt.darkGray)
-dark_palette.setColor(QPalette.Disabled, QPalette.Text, Qt.darkGray)
-dark_palette.setColor(QPalette.Disabled, QPalette.Light, QColor(53, 53, 53))
-
-app.setPalette(dark_palette)
+app.setPalette(build_dark_palette())
 
 controller = MainController()
 controller.show_window()

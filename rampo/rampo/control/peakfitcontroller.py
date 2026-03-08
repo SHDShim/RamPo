@@ -1,5 +1,6 @@
 import os
 import traceback
+import numpy as np
 from qtpy import QtWidgets
 from .mplcontroller import MplController
 from .peakfittablecontroller import PeakfitTableController
@@ -313,13 +314,42 @@ class PeakFitController(object):
         if success:
             QtWidgets.QMessageBox.warning(self.widget, "Information",
                                           'Fitting finished.')
-            self.plot_ctrl.update()
+            self.plot_ctrl.update(limits=self._fit_result_limits())
             self.peakfit_table_ctrl.update_peak_parameters()
             self.peakfit_table_ctrl.update_peak_constraints()
             self.set_tableWidget_PkParams_unsaved()
         else:
             QtWidgets.QMessageBox.warning(self.widget, "Information",
                                           'Fitting failed.')
+
+    def _fit_result_limits(self):
+        if not self.model.current_section_exist():
+            return None
+        section = self.model.current_section
+        bgsub = self.widget.checkBox_BgSub.isChecked()
+        x_range = section.get_xrange()
+        try:
+            current_limits = self.widget.mpl.canvas.ax_pattern.axis()
+            x_min = max(float(current_limits[0]), float(x_range[0]))
+            x_max = min(float(current_limits[1]), float(x_range[1]))
+            if x_max <= x_min:
+                x_min, x_max = float(x_range[0]), float(x_range[1])
+        except Exception:
+            x_min, x_max = float(x_range[0]), float(x_range[1])
+
+        y_min, y_max = section.get_yrange(bgsub=bgsub)
+        residue = section.get_fit_residue(bgsub=bgsub)
+        y_shift = y_min - (y_max - y_min) * 0.05
+        residue_plot = np.asarray(residue, dtype=float) + y_shift
+        if residue_plot.size > 0:
+            y_min = min(float(y_min), float(np.min(residue_plot)))
+            y_max = max(float(y_max), float(np.max(residue_plot)))
+        if y_max <= y_min:
+            span = max(abs(y_max), 1.0) * 1.0e-6
+        else:
+            span = y_max - y_min
+        margin = span * 0.05
+        return (x_min, x_max, y_min - margin, y_max + margin)
 
     def save_to_xls(self):
         temp_dir = get_temp_dir(self.model.get_base_ptn_filename())

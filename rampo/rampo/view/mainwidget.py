@@ -1643,6 +1643,15 @@ class MainWindow(QtWidgets.QMainWindow, Ui_MainWindow):
             self.pushButton_UpdateBackground.setVisible(False)
         if hasattr(self, "pushButton_ResetCakeScale"):
             self.pushButton_ResetCakeScale.setToolTip("Reset CCD contrast scale")
+        if hasattr(self, "pushButton_AddRemoveFromMouse"):
+            self.pushButton_AddRemoveFromMouse.setText("Pick peaks")
+            self.pushButton_AddRemoveFromMouse.setToolTip(
+                "Left click to add a peak, left drag to set peak width, right click to remove the nearest peak")
+        if hasattr(self, "doubleSpinBox_InitialFWHM"):
+            self.doubleSpinBox_InitialFWHM.setValue(5.0)
+            self.doubleSpinBox_InitialFWHM.hide()
+        if hasattr(self, "label_13"):
+            self.label_13.hide()
         if hasattr(self, "pushButton_AboutPeakpo"):
             self.pushButton_AboutPeakpo.setText("About Rampo")
         if hasattr(self, "actionCiting_PeakPo"):
