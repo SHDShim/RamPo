@@ -35,46 +35,36 @@ from ..ds_ramspec import get_data_section
 class MainController(object):
 
     def __init__(self):
-
-        print("MainController.__init__ - START")
         self._shutdown_done = False
         self._defer_plot_update_count = 0
 
         self.widget = MainWindow()
         self.widget._main_controller = self
-        print("  ✓ MainWindow created")
 
         self.model = PeakPoModel8()
-        print("  ✓ PeakPoModel8 created")
 
         self.session_ctrl = SessionController(self.model, self.widget)
-        print("  ✓ SessionController created")
 
         self.base_spectrum_ctrl = BaseSpectrumController(
             self.model, self.widget, session_ctrl=self.session_ctrl)
         self.base_ptn_ctrl = self.base_spectrum_ctrl
-        print("  ✓ BaseSpectrumController created")
         
         self.plot_ctrl = MplController(self.model, self.widget)
-        print("  ✓ MplController created")
         self._replace_toolbar_save_action()
 
         self.diff_ctrl = DiffController(self.model, self.widget, self.plot_ctrl)
         self.plot_ctrl.set_diff_controller(self.diff_ctrl)
         self._propagate_diff_controller()
-        print("  ✓ DiffController created")
 
         self.map_ctrl = MapController(self.model, self.widget)
         self.map_ctrl.set_helpers(
             base_ptn_ctrl=self.base_spectrum_ctrl,
             plot_ctrl=self.plot_ctrl)
-        print("  ✓ MapController created")
 
         self.seq_ctrl = SequenceController(self.model, self.widget)
         self.seq_ctrl.set_helpers(
             base_ptn_ctrl=self.base_spectrum_ctrl,
             plot_ctrl=self.plot_ctrl)
-        print("  ✓ SequenceController created")
         
         self.ccdazi_ctrl = None
         
@@ -84,39 +74,27 @@ class MainController(object):
             capture_nav_state_cb=self._capture_nav_carry_state,
             apply_nav_state_cb=self._apply_nav_carry_state,
         )
-        print("  ✓ WaterfallController created")
         
         self.jcpds_ctrl = JcpdsController(self.model, self.widget)
-        print("  ✓ JcpdsController created")
         
         self.waterfalltable_ctrl = WaterfallTableController(self.model, self.widget)
-        print("  ✓ WaterfallTableController created")
         
         self.jcpdstable_ctrl = JcpdsTableController(self.model, self.widget)
-        print("  ✓ JcpdsTableController created")
         
         self.peakfit_ctrl = PeakFitController(self.model, self.widget)
-        print("  ✓ PeakFitController created")
         
         self.peakfit_table_ctrl = PeakfitTableController(self.model, self.widget)
-        print("  ✓ PeakfitTableController created")
 
         self.export_py_ctrl = ExportPythonController(
             self.model, self.widget, plot_ctrl=self.plot_ctrl)
-        print("  ✓ ExportPythonController created")
         self._propagate_diff_controller()
         self._bg_area_selector = None
         
         self.read_setting()
-        print("  ✓ read_setting() done")
         
         self.connect_channel()
-        print("  ✓ connect_channel() done")
         
         self.clip = QtWidgets.QApplication.clipboard()
-        print("  ✓ clipboard set")
-        
-        print("MainController.__init__ - DONE\n")
 
     def _propagate_diff_controller(self):
         # Multiple controllers keep their own MplController instances.

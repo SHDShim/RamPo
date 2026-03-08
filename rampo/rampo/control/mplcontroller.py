@@ -240,6 +240,40 @@ class MplController(object):
             return x, y
         return self._smooth_xy(x, y)
 
+    def _get_background_fit_display_xy(self):
+        if not self.model.base_ptn_exist():
+            return None, None
+        x_raw, y_raw = self.model.base_ptn.get_raw()
+        if x_raw is None or y_raw is None:
+            return None, None
+        x_fit, y_fit = self._get_smoothed_pattern_xy(x_raw, y_raw)
+        if x_fit is None or y_fit is None:
+            return None, None
+        x_fit = np.asarray(x_fit, dtype=float).reshape(-1)
+        y_fit = np.asarray(y_fit, dtype=float).reshape(-1)
+        n = min(x_fit.size, y_fit.size)
+        if n == 0:
+            return None, None
+        x_fit = x_fit[:n]
+        y_fit = y_fit[:n]
+        valid = np.isfinite(x_fit) & np.isfinite(y_fit)
+        fit_areas = list(getattr(self.model.base_ptn, "bg_fit_areas", []) or [])
+        if fit_areas:
+            fit_mask = np.zeros(n, dtype=bool)
+            for area in fit_areas:
+                try:
+                    xmin = float(area[0])
+                    xmax = float(area[1])
+                except Exception:
+                    continue
+                if xmax < xmin:
+                    xmin, xmax = xmax, xmin
+                fit_mask |= (x_fit >= xmin) & (x_fit <= xmax)
+            valid &= fit_mask
+        if np.count_nonzero(valid) == 0:
+            return None, None
+        return x_fit[valid], y_fit[valid]
+
     def _smooth_cake_x(self, intensity, x):
         settings = self._get_smoothing_settings()
         if settings["despike_kernel"] <= 1 and settings["sg_window"] <= 1:
@@ -719,6 +753,17 @@ class MplController(object):
                 lw=float(
                     self.widget.comboBox_BkgnLineThickness.
                     currentText()))
+            x_fit, y_fit = self._get_background_fit_display_xy()
+            if x_fit is not None and y_fit is not None:
+                self.widget.mpl.canvas.ax_pattern.plot(
+                    x_fit, y_fit,
+                    c=self.model.base_ptn.color,
+                    marker='o',
+                    linestyle='None',
+                    ms=5,
+                    mfc='none',
+                    mew=1.0,
+                    alpha=0.9)
 
     def _plot_peakfit(self):
         if not self.model.current_section_exist():
@@ -915,7 +960,6 @@ class MplController(object):
                     title, color=self.obj_color, fontsize=title_font_size)
                 
                 self._plot_diffpattern(gsas_style)
-                self._plot_background_fit_areas()
                 
                 if self.model.waterfall_exist():
                     self._plot_waterfallpatterns()
