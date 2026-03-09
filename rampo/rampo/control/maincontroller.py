@@ -797,9 +797,18 @@ class MainController(object):
 
         if self._should_carry_nav_category("ccd_roi", "checkBox_CarryNavCCDRoi"):
             ccd_roi = snap.get("ccd_roi", {})
-            if hasattr(self.widget, "spinBox_CCDRowMin") and hasattr(self.widget, "spinBox_CCDRowMax"):
-                row_min = int(ccd_roi.get("row_min", self.widget.spinBox_CCDRowMin.value()))
-                row_max = int(ccd_roi.get("row_max", self.widget.spinBox_CCDRowMax.value()))
+            raw_image = getattr(getattr(self.model, "base_ptn", None), "raw_image", None)
+            has_multirow_ccd = (
+                raw_image is not None and
+                getattr(raw_image, "ndim", 0) >= 2 and
+                int(raw_image.shape[0]) > 1
+            )
+            if ccd_roi != {} and hasattr(self.widget, "spinBox_CCDRowMin") and \
+                    hasattr(self.widget, "spinBox_CCDRowMax") and \
+                    has_multirow_ccd and \
+                    ("row_min" in ccd_roi) and ("row_max" in ccd_roi):
+                row_min = int(ccd_roi["row_min"])
+                row_max = int(ccd_roi["row_max"])
                 self.widget.spinBox_CCDRowMin.blockSignals(True)
                 self.widget.spinBox_CCDRowMax.blockSignals(True)
                 self.widget.spinBox_CCDRowMin.setValue(row_min)

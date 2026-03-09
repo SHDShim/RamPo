@@ -176,9 +176,28 @@ class MplController(object):
                 __, __, chi_cake = self.model.diff_img.get_cake()
             except Exception:
                 chi_cake = None
-            if chi_cake is not None and len(chi_cake) > 0:
-                return (float(np.min(chi_cake)), float(np.max(chi_cake)))
+            if chi_cake is not None and len(chi_cake) > 1:
+                y_min = float(np.min(chi_cake))
+                y_max = float(np.max(chi_cake))
+                if y_min == y_max:
+                    pad = max(abs(y_min), 1.0) * 0.5
+                    return (y_min - pad, y_max + pad)
+                return (y_min, y_max)
         return None
+
+    def _has_plotable_cake(self):
+        if not self.model.diff_img_exist():
+            return False
+        try:
+            intensity_cake, tth_cake, chi_cake = self.model.diff_img.get_cake()
+        except Exception:
+            return False
+        if intensity_cake is None or tth_cake is None or chi_cake is None:
+            return False
+        if np.size(intensity_cake) == 0 or np.size(tth_cake) == 0 or np.size(chi_cake) <= 1:
+            return False
+        arr = np.asarray(intensity_cake)
+        return arr.ndim >= 2 and arr.shape[0] > 1
 
     def _get_smoothing_settings(self):
         despike = int(self.widget.spinBox_SpectrumDespike.value()) \
@@ -336,6 +355,8 @@ class MplController(object):
         # Get cake data
         intensity_cake, tth_cake, chi_cake = self.model.diff_img.get_cake()
         int_plot = np.array(intensity_cake, copy=True)
+        if np.ndim(int_plot) < 2 or int_plot.shape[0] <= 1 or np.size(chi_cake) <= 1:
+            return
 
         diff_mode = False
         if self.diff_ctrl is not None:
@@ -426,9 +447,16 @@ class MplController(object):
         int_new = ma.masked_where(combined_mask, int_plot, copy=False)
 
 
+        y_min = float(chi_cake.min())
+        y_max = float(chi_cake.max())
+        if y_min == y_max:
+            pad = max(abs(y_min), 1.0) * 0.5
+            y_min -= pad
+            y_max += pad
+
         imshow_kwargs = {
             "origin": "lower",
-            "extent": [tth_cake.min(), tth_cake.max(), chi_cake.min(), chi_cake.max()],
+            "extent": [tth_cake.min(), tth_cake.max(), y_min, y_max],
             "aspect": "auto",
             "cmap": cmap,
         }
@@ -954,7 +982,7 @@ class MplController(object):
                     c_limits = self.widget.mpl.canvas.ax_cake.axis()
                     cake_ylimits = c_limits[2:4]
             
-            if self.model.diff_img_exist():
+            if self._has_plotable_cake():
                 new_height = self.widget.horizontalSlider_CakeAxisSize.value()
                 self.widget.mpl.canvas.resize_axes(new_height)
                 self._plot_cake()

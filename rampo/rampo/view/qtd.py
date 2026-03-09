@@ -264,6 +264,7 @@ class Ui_MainWindow(object):
         sizePolicy.setHeightForWidth(self.checkBox_AutoY.sizePolicy().hasHeightForWidth())
         self.checkBox_AutoY.setSizePolicy(sizePolicy)
         self.checkBox_AutoY.setMinimumSize(QtCore.QSize(0, 25))
+        self.checkBox_AutoY.setChecked(True)
         self.checkBox_AutoY.setObjectName("checkBox_AutoY")
         self.horizontalLayout_7.addWidget(self.checkBox_AutoY)
         self.checkBox_LongCursor = QtWidgets.QCheckBox(self.frame_2)

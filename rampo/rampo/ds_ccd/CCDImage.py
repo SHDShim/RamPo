@@ -1,7 +1,6 @@
 import os
 import time
 from PIL import Image
-import fabio
 import numpy.ma as ma
 import numpy as np
 # import matplotlib.pyplot as plt
@@ -66,15 +65,10 @@ class CCDImage(object):
             data = Image.open(self.img_filename)
         elif ext == 'tiff':
             data = Image.open(self.img_filename)
-        elif ext == 'h5':
-            images = fabio.open(self.img_filename)
-            data = images.data
-        elif ext == 'mar3450':
-            data_fabio = fabio.open(img_filename)
-            data = data_fabio.data
-        elif ext == 'cbf':
-            data_fabio = fabio.open(img_filename)
-            data = data_fabio.data
+        else:
+            raise ValueError(
+                "Unsupported CCD image format '{}'. Expected .spe, .tif, or .tiff.".format(
+                    ext))
         self.img = np.array(data)[::-1]
         self._set_direct_image_axes()
         print(str(datetime.datetime.now())[:-7], 

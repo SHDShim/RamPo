@@ -28,6 +28,9 @@ class CCDController(object):
     def connect_channel(self):
         if hasattr(self.widget, "pushButton_Info"):
             self.widget.pushButton_Info.clicked.connect(self.show_tif_header)
+        if hasattr(self.widget, "pushButton_S_CCDReset"):
+            self.widget.pushButton_S_CCDReset.clicked.connect(
+                self.reset_max_cake_scale)
         self.widget.pushButton_ApplyCakeView.clicked.connect(self.update_cake)
         self.widget.pushButton_ApplyMask.clicked.connect(self.apply_mask)
         self.widget.pushButton_MaskReset.clicked.connect(self.reset_maskrange)
@@ -92,6 +95,9 @@ class CCDController(object):
         img = getattr(self.model.diff_img, "img", None)
         if img is None or np.ndim(img) < 2 or img.shape[0] <= 0:
             return
+        if img.shape[0] <= 1:
+            return
+        self._ensure_row_roi_defined_for_full_ccd(img)
         n_rows = int(img.shape[0])
         for box in (self.widget.spinBox_CCDRowMin, self.widget.spinBox_CCDRowMax):
             box.blockSignals(True)
@@ -111,6 +117,28 @@ class CCDController(object):
         self.widget.spinBox_CCDRowMin.blockSignals(False)
         self.widget.spinBox_CCDRowMax.blockSignals(False)
 
+    def _ensure_row_roi_defined_for_full_ccd(self, img=None):
+        if not self.model.base_ptn_exist():
+            return False
+        if img is None:
+            img = getattr(getattr(self.model, "diff_img", None), "img", None)
+        if img is None or np.ndim(img) < 2 or img.shape[0] <= 0:
+            return False
+        if img.shape[0] <= 1:
+            return False
+        current = getattr(self.model.base_ptn, "row_roi", None)
+        is_undefined = current is None
+        if current is not None:
+            try:
+                row_min = int(current[0])
+                row_max = int(current[1])
+                is_undefined = ((row_min, row_max) == (0, 0)) or (row_min == row_max)
+            except Exception:
+                is_undefined = True
+        if not is_undefined:
+            return False
+        return bool(self.model.base_ptn.set_spe_row_roi(0, int(img.shape[0] - 1)))
+
     def _apply_row_roi_to_spectrum(self):
         if (not self.model.base_ptn_exist()) or \
                 (extract_extension(str(self.model.get_base_ptn_filename())).lower() != 'spe'):
@@ -118,10 +146,22 @@ class CCDController(object):
         if (not hasattr(self.widget, "spinBox_CCDRowMin")) or \
                 (getattr(self.model.base_ptn, "raw_image", None) is None):
             return
+        raw_image = getattr(self.model.base_ptn, "raw_image", None)
+        if np.ndim(raw_image) < 2 or raw_image.shape[0] <= 1:
+            return
         row_min = int(self.widget.spinBox_CCDRowMin.value())
         row_max = int(self.widget.spinBox_CCDRowMax.value())
         if row_max < row_min:
             row_min, row_max = row_max, row_min
+            self.widget.spinBox_CCDRowMin.blockSignals(True)
+            self.widget.spinBox_CCDRowMax.blockSignals(True)
+            self.widget.spinBox_CCDRowMin.setValue(row_min)
+            self.widget.spinBox_CCDRowMax.setValue(row_max)
+            self.widget.spinBox_CCDRowMin.blockSignals(False)
+            self.widget.spinBox_CCDRowMax.blockSignals(False)
+        if row_min == row_max:
+            row_min = 0
+            row_max = int(raw_image.shape[0] - 1)
             self.widget.spinBox_CCDRowMin.blockSignals(True)
             self.widget.spinBox_CCDRowMax.blockSignals(True)
             self.widget.spinBox_CCDRowMin.setValue(row_min)
@@ -367,7 +407,7 @@ class CCDController(object):
 
     def _reset_row_roi_to_full(self):
         img = getattr(getattr(self.model, "diff_img", None), "img", None)
-        if img is None or np.ndim(img) < 2 or img.shape[0] <= 0:
+        if img is None or np.ndim(img) < 2 or img.shape[0] <= 1:
             return
         self.widget.spinBox_CCDRowMin.blockSignals(True)
         self.widget.spinBox_CCDRowMax.blockSignals(True)
@@ -423,6 +463,8 @@ class CCDController(object):
     def reset_max_cake_scale(self):
         if hasattr(self.widget, "checkBox_Diff") and self.widget.checkBox_Diff.isChecked():
             return
+        self._ensure_row_roi_defined_for_full_ccd()
+        self._set_row_roi_spin_limits()
         intensity_cake, _, _ = self.model.diff_img.get_cake()
         arr = np.asarray(intensity_cake, dtype=float)
         arr = arr[np.isfinite(arr)]

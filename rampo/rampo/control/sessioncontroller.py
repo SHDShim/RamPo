@@ -409,10 +409,18 @@ class SessionController(object):
                 if "log_y" in hist:
                     self.widget.cake_hist_widget.check_log.setChecked(bool(hist["log_y"]))
         ccd_roi = (ui_state or {}).get("ccd_roi", {})
+        raw_image = getattr(getattr(self.model, "base_ptn", None), "raw_image", None)
+        has_multirow_ccd = (
+            raw_image is not None and
+            getattr(raw_image, "ndim", 0) >= 2 and
+            int(raw_image.shape[0]) > 1
+        )
         if ccd_roi != {} and hasattr(self.widget, "spinBox_CCDRowMin") and \
-                hasattr(self.widget, "spinBox_CCDRowMax"):
-            row_min = int(ccd_roi.get("row_min", self.widget.spinBox_CCDRowMin.value()))
-            row_max = int(ccd_roi.get("row_max", self.widget.spinBox_CCDRowMax.value()))
+                hasattr(self.widget, "spinBox_CCDRowMax") and \
+                has_multirow_ccd and \
+                ("row_min" in ccd_roi) and ("row_max" in ccd_roi):
+            row_min = int(ccd_roi["row_min"])
+            row_max = int(ccd_roi["row_max"])
             self.widget.spinBox_CCDRowMin.blockSignals(True)
             self.widget.spinBox_CCDRowMax.blockSignals(True)
             self.widget.spinBox_CCDRowMin.setValue(row_min)

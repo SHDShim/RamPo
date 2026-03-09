@@ -53,7 +53,7 @@ class Spectrum(object):
             twotheta = np.asarray(spe.x_calibration, dtype=float)
             self.raw_image = raw_image
             self.x_wavelength_raw = np.asarray(twotheta, dtype=float)
-            if raw_image is None or np.ndim(raw_image) < 2:
+            if raw_image is None or np.ndim(raw_image) < 2 or raw_image.shape[0] <= 1:
                 self.row_roi = None
             else:
                 self.row_roi = (0, int(raw_image.shape[0] - 1))

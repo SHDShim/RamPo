@@ -232,7 +232,7 @@ class PeakPoModel(object):
         if self.base_ptn_exist() and \
                 os.path.splitext(str(self.base_ptn.fname))[1].lower() == ".spe":
             return [str(self.base_ptn.fname)]
-        exts = ("tif", "tiff", "mar3450", "cbf", "h5")
+        exts = ("tif", "tiff")
         candidates = []
         for ext in exts:
             for original in (True, False):

@@ -146,6 +146,7 @@ class MainWindow(QtWidgets.QMainWindow, Ui_MainWindow):
         self._setup_seq_tab()
         self._promote_seq_to_main_tab()
         self._reorder_main_tabs_and_fit_tab_names()
+        self._setup_toolbar_ccd_reset_button()
         self._setup_toolbar_diff_toggle()
         self._spread_top_toolbar_even()
         if hasattr(self, "pushButton_S_Zoom"):
@@ -297,6 +298,23 @@ class MainWindow(QtWidgets.QMainWindow, Ui_MainWindow):
         self.ntb_NightView.setText("Night")
         self.mpl.ntb.addWidget(self.ntb_NightView)
         """
+
+    def _setup_toolbar_ccd_reset_button(self):
+        if (not hasattr(self, "horizontalLayout_21")) or \
+                hasattr(self, "pushButton_S_CCDReset"):
+            return
+        self.pushButton_S_CCDReset = QtWidgets.QPushButton(self.frame_9)
+        self.pushButton_S_CCDReset.setObjectName("pushButton_S_CCDReset")
+        self.pushButton_S_CCDReset.setMinimumSize(QtCore.QSize(25, 25))
+        self.pushButton_S_CCDReset.setMaximumSize(QtCore.QSize(40, 16777215))
+        self.pushButton_S_CCDReset.setText("CCD")
+        self.pushButton_S_CCDReset.setToolTip("Reset CCD contrast scale")
+        idx_zoom = self.horizontalLayout_21.indexOf(self.pushButton_S_Zoom) \
+            if hasattr(self, "pushButton_S_Zoom") else -1
+        if idx_zoom >= 0:
+            self.horizontalLayout_21.insertWidget(idx_zoom + 1, self.pushButton_S_CCDReset)
+        else:
+            self.horizontalLayout_21.insertWidget(0, self.pushButton_S_CCDReset)
 
     def _setup_nav_carryover_config(self):
         if not hasattr(self, "scrollAreaWidgetContents_2") or \

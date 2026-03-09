@@ -2,17 +2,64 @@ import numpy as np
 import os
 import re
 import json
-from pytheos import bm3_v, bm3_p
 from .xrd import cal_UnitCellVolume, cal_dspacing
-#import pymatgen as mg
-import pymatgen.core as mg 
-from pymatgen.analysis.diffraction.xrd import XRDCalculator
-from pymatgen.symmetry.analyzer import SpacegroupAnalyzer
 from .jcpds_dioptas import jcpds, jcpds_reflection
 import datetime
 from scipy import interpolate
 
 # import numpy.ma as ma
+
+try:
+    import pymatgen.core as mg
+    from pymatgen.analysis.diffraction.xrd import XRDCalculator
+    from pymatgen.symmetry.analyzer import SpacegroupAnalyzer
+except ImportError:
+    mg = None
+    XRDCalculator = None
+    SpacegroupAnalyzer = None
+
+
+def bm3_p(volume, v0, k0, k0p):
+    volume = np.asarray(volume, dtype=float)
+    eta = np.power(v0 / volume, 1.0 / 3.0)
+    pressure = 1.5 * k0 * (np.power(eta, 7.0) - np.power(eta, 5.0))
+    pressure *= 1.0 + 0.75 * (k0p - 4.0) * (np.power(eta, 2.0) - 1.0)
+    if pressure.ndim == 0:
+        return float(pressure)
+    return pressure
+
+
+def bm3_v(pressure, v0, k0, k0p, min_strain=0.3):
+    pressure = float(pressure)
+    if pressure <= 0.0:
+        return float(v0)
+
+    min_volume = float(v0) * max(1.0e-6, (1.0 - float(min_strain)) ** 3)
+    low = min_volume
+    high = float(v0)
+
+    p_low = float(bm3_p(low, v0, k0, k0p))
+    while p_low < pressure and low > v0 * 1.0e-6:
+        low *= 0.5
+        p_low = float(bm3_p(low, v0, k0, k0p))
+
+    for __ in range(80):
+        mid = 0.5 * (low + high)
+        p_mid = float(bm3_p(mid, v0, k0, k0p))
+        if abs(p_mid - pressure) < 1.0e-8:
+            return mid
+        if p_mid > pressure:
+            low = mid
+        else:
+            high = mid
+    return 0.5 * (low + high)
+
+
+def _require_pymatgen_for_cif():
+    if mg is not None and XRDCalculator is not None and SpacegroupAnalyzer is not None:
+        return
+    raise ImportError(
+        "CIF import requires the optional 'pymatgen' dependency.")
 
 
 class DiffractionLine:
@@ -727,6 +774,8 @@ class JCPDS(object):
         -------
 
         """
+        _require_pymatgen_for_cif()
+
         mg_version = mg.__version__
         mg_version_split = mg_version.split('.')
         d_current_version = datetime.datetime(int(mg_version_split[0]),
