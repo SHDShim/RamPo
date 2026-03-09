@@ -2,8 +2,6 @@
 
 RamPo is a desktop application for processing Raman spectroscopy data, with a workflow adapted from PeakPo and refocused for high-pressure Raman experiments.
 
-This repository is currently intended for private GitHub hosting during beta testing. The plan is to make it public after the beta phase is complete.
-
 ## Current Scope
 
 RamPo is designed around Raman spectroscopy for high pressure research.
@@ -12,7 +10,6 @@ Key points:
 
 - input data: `.spe` Raman files
 - 2D detector view: CCD image
-- 1D processed view: Raman spectrum in Raman shift (`cm$^{-1}$`)
 - reference library concept: `RAPO` files for pressure-dependent Raman mode shifts (under development)
 - session/save model: JSON-based snapshots stored in `<filename>-rampo/`
 
@@ -30,27 +27,40 @@ Key points:
 - perform PeakFit analysis
 - save and restore numbered backup snapshots
 
-## Running RamPo
+## Installation
 
-From the repository root:
+If you already have PeakPo 7.10.x installed and a conda environment named `pkpo710`, you can install RamPo in that environment.
 
 ```bash
-python3 -m rampo
+conda activate pkpo710
 ```
 
-The application entrypoint is:
+```bash
+pip install rampo
+```
 
-- [rampo/__main__.py](rampo/__main__.py)
+## Running RamPo
+
+```bash
+conda activate pkpo710
+```
+
+```bash
+rampo
+```
 
 ## Typical Workflow
 
-1. Open an `.spe` file.
+1. Open an `.spe` file by clicking `Open SPE` button.
 2. Set the excitation laser wavelength.
-3. Define the CCD ROI.
-4. Configure smoothing if needed.
-5. Define background fit areas and fit the background.
-6. Use Spectrum, Map, Diff, Seq, Waterfall, or PeakFit tools as needed.
-7. Press `Save` to create a numbered snapshot in the session folder.
+3. In the top toolbar, click the `CCD` button and the zoom-out button to rescale the spectrum display.
+4. In the `Spectrum` > `Process` tab, click `Select ROI` and draw a rectangle in the top image to define the ROI for spectrum integration.
+5. In the same tab, adjust the parameters in `Smoothing` if smoothing is needed.
+6. In the same tab, to define the background, click `Add area` and draw a rectangle on the lower spectrum plot to mark a range for background data points. Repeat this for several areas, ideally including both the left and right ends of the spectrum. Once you have selected enough background points, click `Fig BG` to fit the background. Check the `Bg show` box to display the fit, and check `BgSub` to subtract the background.
+7. For mapping, open the `Map` tab and click `Load SPE files` to select the map files. For ASU data, make sure you choose `*-raw.spe` files. Select `Row-major` for ASU data and `Snake` for APS data in the dropdown menu. Make sure `Nx` and `Ny` are correctly detected by RamPo. If not, update the values and then click `Compute Map`.
+8. In the `Map` tab, click `Select ROI` to choose the spectral range where intensity mapping will be performed.
+9. Use Diff, Seq, Waterfall, or PeakFit tools as needed.
+10. Press `Save` to create a numbered snapshot in the session folder.
 
 ## Save / Restore Behavior
 
@@ -75,26 +85,11 @@ Each numbered backup is intended to be self-contained and stores the JSON sessio
 
 - Some disabled UI elements are intentionally kept visible as placeholders for future development.
 
-## Version
-
-Current application version:
-
-- `0.1.0`
-
-See [rampo/rampo/version.py](/Users/danshim/Python-git/RamPo/rampo/rampo/version.py).
-See [rampo/rampo/version.py](rampo/rampo/version.py).
-
 ## Citation
 
 Current citation placeholder:
 
-> Rampo - Raman spectroscopy analysis software for high-pressure experiments.
+> RamPo - Raman spectroscopy analysis software for high-pressure experiments.
 
 See [rampo/rampo/citation.py](/Users/danshim/Python-git/RamPo/rampo/rampo/citation.py).
 See [rampo/rampo/citation.py](rampo/rampo/citation.py).
-
-## Status
-
-Private beta.
-
-The codebase has been heavily adapted from PeakPo toward Raman spectroscopy. Further cleanup, renaming, and documentation refinement are still ongoing before public release.
