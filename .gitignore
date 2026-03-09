@@ -6,6 +6,12 @@ T-rax-develop/
 __pycache__/
 *.py[cod]
 *.so
+build/
+dist/
+*.egg-info/
+.venv/
+.venv-publish/
+pip-wheel-metadata/
 
 # macOS
 .DS_Store

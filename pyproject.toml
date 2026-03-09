@@ -1,0 +1,51 @@
+[build-system]
+requires = ["setuptools>=69", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "rampo"
+version = "0.1.0"
+description = "GUI application for Raman spectroscopy analysis in high-pressure experiments."
+readme = "README.md"
+requires-python = ">=3.10"
+authors = [
+  { name = "Dan Shim" },
+]
+license = "GPL-3.0-only"
+classifiers = [
+  "Development Status :: 3 - Alpha",
+  "Environment :: X11 Applications :: Qt",
+  "Intended Audience :: Science/Research",
+  "Operating System :: OS Independent",
+  "Programming Language :: Python :: 3",
+  "Topic :: Scientific/Engineering",
+]
+dependencies = [
+  "lmfit",
+  "matplotlib",
+  "numpy",
+  "pillow",
+  "PyQt5",
+  "python-dateutil",
+  "qtpy",
+  "scipy",
+  "xlwt",
+]
+
+[project.optional-dependencies]
+cif = [
+  "pymatgen",
+]
+
+[project.scripts]
+rampo = "rampo.__main__:main"
+
+[tool.setuptools]
+include-package-data = true
+license-files = ["LICENSE"]
+
+[tool.setuptools.packages.find]
+include = ["rampo*"]
+
+[tool.setuptools.package-data]
+"rampo.rampo" = ["mplstyle/*.mplstyle"]
