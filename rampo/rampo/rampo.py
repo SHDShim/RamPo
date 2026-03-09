@@ -2,6 +2,10 @@ import os
 import sys
 import faulthandler
 
+from .._qt import enforce_pyqt6
+
+enforce_pyqt6()
+
 if sys.platform == 'darwin':
     os.environ['MPLBACKEND'] = 'QtAgg'
     os.environ.setdefault('QT_OPENGL', 'software')

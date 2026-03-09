@@ -29,21 +29,13 @@ Key points:
 
 ## Installation
 
-If you already have PeakPo 7.10.x installed and a conda environment named `pkpo710`, you can install RamPo in that environment.
-
-```bash
-conda activate pkpo710
-```
+RamPo requires Python 3.10 or newer.
 
 ```bash
 pip install rampo
 ```
 
 ## Running RamPo
-
-```bash
-conda activate pkpo710
-```
 
 ```bash
 rampo
@@ -87,9 +79,6 @@ Each numbered backup is intended to be self-contained and stores the JSON sessio
 
 ## Citation
 
-Current citation placeholder:
-
 > RamPo - Raman spectroscopy analysis software for high-pressure experiments.
 
-See [rampo/rampo/citation.py](/Users/danshim/Python-git/RamPo/rampo/rampo/citation.py).
-See [rampo/rampo/citation.py](rampo/rampo/citation.py).
+The citation string shipped with the package is defined in `rampo/rampo/citation.py`.

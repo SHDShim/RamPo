@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "rampo"
-version = "0.1.0"
+version = "0.2.0"
 description = "GUI application for Raman spectroscopy analysis in high-pressure experiments."
 readme = "README.md"
 requires-python = ">=3.10"
@@ -13,12 +13,17 @@ authors = [
   { name = "Dan Shim" },
 ]
 license = "GPL-3.0-only"
+keywords = ["raman", "spectroscopy", "gui", "science", "high-pressure"]
 classifiers = [
   "Development Status :: 3 - Alpha",
   "Environment :: X11 Applications :: Qt",
   "Intended Audience :: Science/Research",
   "Operating System :: OS Independent",
   "Programming Language :: Python :: 3",
+  "Programming Language :: Python :: 3.10",
+  "Programming Language :: Python :: 3.11",
+  "Programming Language :: Python :: 3.12",
+  "Programming Language :: Python :: 3.13",
   "Topic :: Scientific/Engineering",
 ]
 dependencies = [
@@ -37,6 +42,11 @@ dependencies = [
 cif = [
   "pymatgen",
 ]
+
+[project.urls]
+Homepage = "https://github.com/SHDShim/RamPo"
+Repository = "https://github.com/SHDShim/RamPo.git"
+Issues = "https://github.com/SHDShim/RamPo/issues"
 
 [project.scripts]
 rampo = "rampo.__main__:main"
