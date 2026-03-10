@@ -777,7 +777,7 @@ class MplController(object):
             x_bg, y_bg = self.model.base_ptn.get_background()
             x_bg, y_bg = self._get_smoothed_pattern_xy(x_bg, y_bg)
             self.widget.mpl.canvas.ax_pattern.plot(
-                x_bg, y_bg, c=self.model.base_ptn.color, ls='--',
+                x_bg, y_bg, c='#facc15', ls='--',
                 lw=float(
                     self.widget.comboBox_BkgnLineThickness.
                     currentText()))
@@ -785,13 +785,14 @@ class MplController(object):
             if x_fit is not None and y_fit is not None:
                 self.widget.mpl.canvas.ax_pattern.plot(
                     x_fit, y_fit,
-                    c=self.model.base_ptn.color,
+                    c='#facc15',
                     marker='o',
                     linestyle='None',
                     ms=5,
-                    mfc='none',
-                    mew=1.0,
-                    alpha=0.9)
+                    mfc='#facc15',
+                    mec='#ca8a04',
+                    mew=0.8,
+                    alpha=0.95)
 
     def _plot_peakfit(self):
         if not self.model.current_section_exist():

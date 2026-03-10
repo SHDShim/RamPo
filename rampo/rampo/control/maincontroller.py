@@ -1310,6 +1310,10 @@ class MainController(object):
                 print(str(datetime.datetime.now())[:-7],
                     ": Skipped BG subtraction for {0:d} waterfall item(s) "
                     "without raw data.".format(n_skipped))
+        if hasattr(self.widget, "checkBox_ShowBg"):
+            self.widget.checkBox_ShowBg.blockSignals(True)
+            self.widget.checkBox_ShowBg.setChecked(True)
+            self.widget.checkBox_ShowBg.blockSignals(False)
         if self._plot_update_deferred():
             return
         self.plot_new_graph()

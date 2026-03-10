@@ -65,7 +65,7 @@ class MainWindow(QtWidgets.QMainWindow, Ui_MainWindow):
         self.comboBox_BasePtnLineThickness.setCurrentText('1')
         self.comboBox_PtnJCPDSBarThickness.setCurrentText('1')
         self.comboBox_CakeJCPDSBarThickness.setCurrentText('0.5')
-        self.comboBox_BkgnLineThickness.setCurrentText('0.5')
+        self.comboBox_BkgnLineThickness.setCurrentText('2')
         self.comboBox_WaterfallLineThickness.setCurrentText('0.5')
         self.comboBox_VertCursorThickness.setCurrentText('1')
         fontsizes = ['4', '6', '8', '10', '12', '14', '16', '18', '20', '24',
@@ -260,6 +260,8 @@ class MainWindow(QtWidgets.QMainWindow, Ui_MainWindow):
         self.doubleSpinBox_Temperature.valueChanged.connect(
             self._update_pt_spinbox_colors)
         self._update_pt_spinbox_colors()
+        self._align_all_spinboxes_right()
+        self._apply_table_palette()
         self._fix_tab_clipping()
         self._apply_rampo_labels()
         self._disable_rapo_tab()
@@ -306,7 +308,7 @@ class MainWindow(QtWidgets.QMainWindow, Ui_MainWindow):
         self.pushButton_S_CCDReset.setObjectName("pushButton_S_CCDReset")
         self.pushButton_S_CCDReset.setMinimumSize(QtCore.QSize(25, 25))
         self.pushButton_S_CCDReset.setMaximumSize(QtCore.QSize(40, 16777215))
-        self.pushButton_S_CCDReset.setText("CCD")
+        self.pushButton_S_CCDReset.setText("▁▅█")
         self.pushButton_S_CCDReset.setToolTip("Reset CCD contrast scale")
         idx_zoom = self.horizontalLayout_21.indexOf(self.pushButton_S_Zoom) \
             if hasattr(self, "pushButton_S_Zoom") else -1
@@ -314,6 +316,46 @@ class MainWindow(QtWidgets.QMainWindow, Ui_MainWindow):
             self.horizontalLayout_21.insertWidget(idx_zoom + 1, self.pushButton_S_CCDReset)
         else:
             self.horizontalLayout_21.insertWidget(0, self.pushButton_S_CCDReset)
+
+    def _align_all_spinboxes_right(self):
+        align = QtCore.Qt.AlignRight
+        for box in self.findChildren((QtWidgets.QSpinBox, QtWidgets.QDoubleSpinBox)):
+            try:
+                box.setAlignment(align)
+            except Exception:
+                pass
+
+    def _apply_table_palette(self):
+        style = (
+            "QTableWidget {"
+            "background-color: #d1d5db;"
+            "alternate-background-color: #e5e7eb;"
+            "color: #111827;"
+            "gridline-color: #9ca3af;"
+            "selection-background-color: #93c5fd;"
+            "selection-color: #111827;"
+            "}"
+            "QTableWidget::item {"
+            "background-color: #d1d5db;"
+            "color: #111827;"
+            "}"
+            "QHeaderView::section {"
+            "background-color: #6b7280;"
+            "color: #f9fafb;"
+            "border: 1px solid #4b5563;"
+            "padding: 2px 4px;"
+            "}"
+            "QTableCornerButton::section {"
+            "background-color: #6b7280;"
+            "border: 1px solid #4b5563;"
+            "}"
+        )
+        for table in self.findChildren(QtWidgets.QTableWidget):
+            try:
+                table.setAlternatingRowColors(True)
+                table.setStyleSheet(style)
+            except Exception:
+                pass
 
     def _setup_nav_carryover_config(self):
         if not hasattr(self, "scrollAreaWidgetContents_2") or \
@@ -551,6 +593,7 @@ class MainWindow(QtWidgets.QMainWindow, Ui_MainWindow):
         self.spinBox_TitleFontSize.setMinimumHeight(25)
         self.spinBox_TitleFontSize.setKeyboardTracking(False)
         self.spinBox_TitleFontSize.setStyle(SpinBoxFixStyle())
+        self.spinBox_TitleFontSize.setAlignment(QtCore.Qt.AlignRight)
 
         self.label_TitleMaxLength = QtWidgets.QLabel("Max length", self.groupBox_TitleConfig)
         self.label_TitleMaxLength.setObjectName("label_TitleMaxLength")
@@ -562,6 +605,7 @@ class MainWindow(QtWidgets.QMainWindow, Ui_MainWindow):
         self.spinBox_TitleMaxLength.setMinimumHeight(25)
         self.spinBox_TitleMaxLength.setKeyboardTracking(False)
         self.spinBox_TitleMaxLength.setStyle(SpinBoxFixStyle())
+        self.spinBox_TitleMaxLength.setAlignment(QtCore.Qt.AlignRight)
 
         self.gridLayout_TitleConfig.addWidget(self.label_TitleFontSize, 0, 2, 1, 1)
         self.gridLayout_TitleConfig.addWidget(self.spinBox_TitleFontSize, 0, 3, 1, 1)
@@ -625,9 +669,29 @@ class MainWindow(QtWidgets.QMainWindow, Ui_MainWindow):
                 self.gridLayout_9.addWidget(self.tableWidget_BackgroundConstraints, 4, 0, 1, 3)
                 self.pushButton_BGAreaAdd = QtWidgets.QPushButton("Add area", self.groupBox_4)
                 self.pushButton_BGAreaAdd.setCheckable(True)
+                self._set_action_button_style(
+                    self.pushButton_BGAreaAdd,
+                    base_bg="#ca8a04",
+                    hover_bg="#eab308",
+                    pressed_bg="#a16207",
+                    checked_bg="#facc15",
+                    text_color="#111827",
+                    border_color="#facc15")
                 self.pushButton_BGAreaRemove = QtWidgets.QPushButton("Remove area", self.groupBox_4)
+                self.pushButton_BGAreaRemove.setMinimumHeight(25)
+                self.pushButton_BGAreaRemove.setMaximumHeight(25)
                 self.pushButton_BGAreaClear = QtWidgets.QPushButton("Clear areas", self.groupBox_4)
+                self.pushButton_BGAreaClear.setMinimumHeight(25)
+                self.pushButton_BGAreaClear.setMaximumHeight(25)
                 self.pushButton_BGFit = QtWidgets.QPushButton("Fit BG", self.groupBox_4)
+                self._set_action_button_style(
+                    self.pushButton_BGFit,
+                    base_bg="#b91c1c",
+                    hover_bg="#dc2626",
+                    pressed_bg="#991b1b",
+                    checked_bg="#991b1b",
+                    text_color="#f8fafc",
+                    border_color="#ef4444")
                 self.horizontalLayout_BGAreaButtons = QtWidgets.QHBoxLayout()
                 self.horizontalLayout_BGAreaButtons.setContentsMargins(0, 0, 0, 0)
                 self.horizontalLayout_BGAreaButtons.addWidget(self.pushButton_BGAreaAdd)
@@ -691,6 +755,7 @@ class MainWindow(QtWidgets.QMainWindow, Ui_MainWindow):
         self.doubleSpinBox_CCDScaleMin.setRange(-1.0e12, 1.0e12)
         self.doubleSpinBox_CCDScaleMin.setMinimumHeight(25)
         self.doubleSpinBox_CCDScaleMin.setKeyboardTracking(False)
+        self.doubleSpinBox_CCDScaleMin.setAlignment(QtCore.Qt.AlignRight)
 
         self.label_CCDScaleMax = QtWidgets.QLabel("Max", self.frame_CakeTopGrid)
         self.doubleSpinBox_CCDScaleMax = QtWidgets.QDoubleSpinBox(self.frame_CakeTopGrid)
@@ -699,6 +764,7 @@ class MainWindow(QtWidgets.QMainWindow, Ui_MainWindow):
         self.doubleSpinBox_CCDScaleMax.setRange(-1.0e12, 1.0e12)
         self.doubleSpinBox_CCDScaleMax.setMinimumHeight(25)
         self.doubleSpinBox_CCDScaleMax.setKeyboardTracking(False)
+        self.doubleSpinBox_CCDScaleMax.setAlignment(QtCore.Qt.AlignRight)
 
         self.gridLayout_CakeTop.addWidget(self.label_CCDScaleMin, 0, 0, 1, 1)
         self.gridLayout_CakeTop.addWidget(self.doubleSpinBox_CCDScaleMin, 0, 1, 1, 1)
@@ -779,16 +845,28 @@ class MainWindow(QtWidgets.QMainWindow, Ui_MainWindow):
         self.spinBox_CCDRowMin.setMinimum(0)
         self.spinBox_CCDRowMin.setMaximum(0)
         self.spinBox_CCDRowMin.setMinimumHeight(25)
+        self.spinBox_CCDRowMin.setAlignment(QtCore.Qt.AlignRight)
         self.label_CCDRowMax = QtWidgets.QLabel("Row max", self.groupBox_CCDRoi)
         self.spinBox_CCDRowMax = QtWidgets.QSpinBox(self.groupBox_CCDRoi)
         self.spinBox_CCDRowMax.setMinimum(0)
         self.spinBox_CCDRowMax.setMaximum(0)
         self.spinBox_CCDRowMax.setMinimumHeight(25)
+        self.spinBox_CCDRowMax.setAlignment(QtCore.Qt.AlignRight)
         self.pushButton_CCDSelectRoi = QtWidgets.QPushButton("Select ROI", self.groupBox_CCDRoi)
         self.pushButton_CCDSelectRoi.setObjectName("pushButton_CCDSelectRoi")
         self.pushButton_CCDSelectRoi.setCheckable(True)
+        self._set_action_button_style(
+            self.pushButton_CCDSelectRoi,
+            base_bg="#ca8a04",
+            hover_bg="#eab308",
+            pressed_bg="#a16207",
+            checked_bg="#facc15",
+            text_color="#111827",
+            border_color="#facc15")
         self.pushButton_CCDFullRoi = QtWidgets.QPushButton("Full CCD", self.groupBox_CCDRoi)
         self.pushButton_CCDFullRoi.setObjectName("pushButton_CCDFullRoi")
+        self.pushButton_CCDFullRoi.setMinimumHeight(25)
+        self.pushButton_CCDFullRoi.setMaximumHeight(25)
         self.gridLayout_CCDRoi.addWidget(self.label_CCDRowMin, 0, 0, 1, 1)
         self.gridLayout_CCDRoi.addWidget(self.spinBox_CCDRowMin, 0, 1, 1, 1)
         self.gridLayout_CCDRoi.addWidget(self.label_CCDRowMax, 0, 2, 1, 1)
@@ -1005,6 +1083,16 @@ class MainWindow(QtWidgets.QMainWindow, Ui_MainWindow):
         self.pushButton_MapLoadChi.setObjectName("pushButton_MapLoadChi")
         self.pushButton_MapLoadChi.setMinimumSize(QtCore.QSize(140, 28))
         self.pushButton_MapLoadChi.setMaximumWidth(180)
+        self._set_action_button_style(
+            self.pushButton_MapLoadChi,
+            base_bg="#15803d",
+            hover_bg="#16a34a",
+            pressed_bg="#166534",
+            checked_bg="#166534",
+            text_color="#f8fafc",
+            border_color="#22c55e")
+        self.pushButton_MapLoadChi.setMinimumHeight(28)
+        self.pushButton_MapLoadChi.setMaximumHeight(28)
         self.label_MapLoaded = QtWidgets.QLabel("Loaded: 0", self.groupBox_MapLoad)
         self.label_MapLoaded.setObjectName("label_MapLoaded")
         self.label_MapLoaded.setAlignment(QtCore.Qt.AlignLeft | QtCore.Qt.AlignVCenter)
@@ -1050,13 +1138,32 @@ class MainWindow(QtWidgets.QMainWindow, Ui_MainWindow):
         self.pushButton_MapSetRoi = QtWidgets.QPushButton("Select ROI", self.groupBox_MapRoi)
         self.pushButton_MapSetRoi.setObjectName("pushButton_MapSetRoi")
         self.pushButton_MapSetRoi.setCheckable(True)
+        self._set_action_button_style(
+            self.pushButton_MapSetRoi,
+            base_bg="#ca8a04",
+            hover_bg="#eab308",
+            pressed_bg="#a16207",
+            checked_bg="#facc15",
+            text_color="#111827",
+            border_color="#facc15")
         self.pushButton_MapClearRoi = QtWidgets.QPushButton("Clear ROI", self.groupBox_MapRoi)
         self.pushButton_MapClearRoi.setObjectName("pushButton_MapClearRoi")
         self.pushButton_MapCompute = QtWidgets.QPushButton("Compute Map", self.groupBox_MapRoi)
         self.pushButton_MapCompute.setObjectName("pushButton_MapCompute")
-        self.pushButton_MapSetRoi.setMinimumHeight(28)
+        self._set_action_button_style(
+            self.pushButton_MapCompute,
+            base_bg="#b91c1c",
+            hover_bg="#dc2626",
+            pressed_bg="#991b1b",
+            checked_bg="#991b1b",
+            text_color="#f8fafc",
+            border_color="#ef4444")
         self.pushButton_MapClearRoi.setMinimumHeight(28)
+        self.pushButton_MapClearRoi.setMaximumHeight(28)
+        self.pushButton_MapSetRoi.setMinimumHeight(28)
+        self.pushButton_MapSetRoi.setMaximumHeight(28)
         self.pushButton_MapCompute.setMinimumHeight(28)
+        self.pushButton_MapCompute.setMaximumHeight(28)
         self.lineEdit_MapRoiSummary = QtWidgets.QLineEdit(self.groupBox_MapRoi)
         self.lineEdit_MapRoiSummary.setObjectName("lineEdit_MapRoiSummary")
         self.lineEdit_MapRoiSummary.setReadOnly(True)
@@ -1235,6 +1342,16 @@ class MainWindow(QtWidgets.QMainWindow, Ui_MainWindow):
         self.pushButton_SeqLoadChi.setObjectName("pushButton_SeqLoadChi")
         self.pushButton_SeqLoadChi.setMinimumSize(QtCore.QSize(140, 28))
         self.pushButton_SeqLoadChi.setMaximumWidth(180)
+        self._set_action_button_style(
+            self.pushButton_SeqLoadChi,
+            base_bg="#15803d",
+            hover_bg="#16a34a",
+            pressed_bg="#166534",
+            checked_bg="#166534",
+            text_color="#f8fafc",
+            border_color="#22c55e")
+        self.pushButton_SeqLoadChi.setMinimumHeight(28)
+        self.pushButton_SeqLoadChi.setMaximumHeight(28)
         self.label_SeqLoaded = QtWidgets.QLabel("Loaded: 0", self.groupBox_SeqLoad)
         self.label_SeqLoaded.setObjectName("label_SeqLoaded")
         self.label_SeqLoaded.setAlignment(QtCore.Qt.AlignLeft | QtCore.Qt.AlignVCenter)
@@ -1251,13 +1368,32 @@ class MainWindow(QtWidgets.QMainWindow, Ui_MainWindow):
         self.pushButton_SeqSetRoi = QtWidgets.QPushButton("Select ROI", self.groupBox_SeqRoi)
         self.pushButton_SeqSetRoi.setObjectName("pushButton_SeqSetRoi")
         self.pushButton_SeqSetRoi.setCheckable(True)
+        self._set_action_button_style(
+            self.pushButton_SeqSetRoi,
+            base_bg="#ca8a04",
+            hover_bg="#eab308",
+            pressed_bg="#a16207",
+            checked_bg="#facc15",
+            text_color="#111827",
+            border_color="#facc15")
         self.pushButton_SeqClearRoi = QtWidgets.QPushButton("Clear ROI", self.groupBox_SeqRoi)
         self.pushButton_SeqClearRoi.setObjectName("pushButton_SeqClearRoi")
         self.pushButton_SeqCompute = QtWidgets.QPushButton("Compute Seq.", self.groupBox_SeqRoi)
         self.pushButton_SeqCompute.setObjectName("pushButton_SeqCompute")
-        self.pushButton_SeqSetRoi.setMinimumHeight(28)
+        self._set_action_button_style(
+            self.pushButton_SeqCompute,
+            base_bg="#b91c1c",
+            hover_bg="#dc2626",
+            pressed_bg="#991b1b",
+            checked_bg="#991b1b",
+            text_color="#f8fafc",
+            border_color="#ef4444")
         self.pushButton_SeqClearRoi.setMinimumHeight(28)
+        self.pushButton_SeqClearRoi.setMaximumHeight(28)
+        self.pushButton_SeqSetRoi.setMinimumHeight(28)
+        self.pushButton_SeqSetRoi.setMaximumHeight(28)
         self.pushButton_SeqCompute.setMinimumHeight(28)
+        self.pushButton_SeqCompute.setMaximumHeight(28)
         self.lineEdit_SeqRoiSummary = QtWidgets.QLineEdit(self.groupBox_SeqRoi)
         self.lineEdit_SeqRoiSummary.setObjectName("lineEdit_SeqRoiSummary")
         self.lineEdit_SeqRoiSummary.setReadOnly(True)
@@ -1587,6 +1723,34 @@ class MainWindow(QtWidgets.QMainWindow, Ui_MainWindow):
             "}"
         )
 
+    def _set_action_button_style(self, button, base_bg, hover_bg, pressed_bg,
+                                 checked_bg=None, text_color="#f8fafc",
+                                 border_color="#5b616b"):
+        if button is None:
+            return
+        checked_bg = checked_bg or pressed_bg
+        button.setMinimumHeight(25)
+        button.setMaximumHeight(25)
+        button.setStyleSheet(
+            "QPushButton {"
+            f"background-color: {base_bg};"
+            f"color: {text_color};"
+            f"border: 1px solid {border_color};"
+            "border-radius: 4px;"
+            "padding: 0px 10px;"
+            "}"
+            "QPushButton:hover {"
+            f"background-color: {hover_bg};"
+            "}"
+            "QPushButton:pressed {"
+            f"background-color: {pressed_bg};"
+            "}"
+            "QPushButton:checked {"
+            f"background-color: {checked_bg};"
+            f"border: 1px solid {checked_bg};"
+            "}"
+        )
+
     def _apply_rampo_labels(self):
         self.setWindowTitle("Rampo ver. " + str(__version__))
         if hasattr(self, "checkBox_ShowCake"):
@@ -1602,6 +1766,57 @@ class MainWindow(QtWidgets.QMainWindow, Ui_MainWindow):
                 self.tabWidget.setTabText(idx, "CCD")
         if hasattr(self, "pushButton_NewJlist"):
             self.pushButton_NewJlist.setText("+ RAPO")
+        if hasattr(self, "pushButton_PkFtSectionSetToCurrent"):
+            self._set_action_button_style(
+                self.pushButton_PkFtSectionSetToCurrent,
+                base_bg="#ca8a04",
+                hover_bg="#eab308",
+                pressed_bg="#a16207",
+                checked_bg="#facc15",
+                text_color="#111827",
+                border_color="#facc15")
+        if hasattr(self, "pushButton_AddRemoveFromMouse"):
+            self._set_action_button_style(
+                self.pushButton_AddRemoveFromMouse,
+                base_bg="#ca8a04",
+                hover_bg="#eab308",
+                pressed_bg="#a16207",
+                checked_bg="#facc15",
+                text_color="#111827",
+                border_color="#facc15")
+        if hasattr(self, "pushButton_ConductFitting"):
+            self._set_action_button_style(
+                self.pushButton_ConductFitting,
+                base_bg="#b91c1c",
+                hover_bg="#dc2626",
+                pressed_bg="#991b1b",
+                checked_bg="#991b1b",
+                text_color="#f8fafc",
+                border_color="#ef4444")
+        if hasattr(self, "pushButton_PkSave"):
+            self._set_action_button_style(
+                self.pushButton_PkSave,
+                base_bg="#15803d",
+                hover_bg="#16a34a",
+                pressed_bg="#166534",
+                checked_bg="#166534",
+                text_color="#f8fafc",
+                border_color="#22c55e")
+        if hasattr(self, "pushButton_SetFitSection"):
+            self._set_action_button_style(
+                self.pushButton_SetFitSection,
+                base_bg="#ca8a04",
+                hover_bg="#eab308",
+                pressed_bg="#a16207",
+                checked_bg="#facc15",
+                text_color="#111827",
+                border_color="#facc15")
+        for name in ("pushButton_SetFitSection", "pushButton_ZoomToSection",
+                     "pushButton_ClearSection", "pushButton_ConductFitting",
+                     "pushButton_PkSave"):
+            if hasattr(self, name):
+                getattr(self, name).setMinimumHeight(25)
+                getattr(self, name).setMaximumHeight(25)
         if hasattr(self, "pushButton_AddToJlist"):
             self.pushButton_AddToJlist.setToolTip("Add a RAPO file to the list")
         if hasattr(self, "pushButton_ViewJCPDS"):
@@ -1728,10 +1943,14 @@ class MainWindow(QtWidgets.QMainWindow, Ui_MainWindow):
             return
         self.groupBox_SpectrumSmooth = QtWidgets.QGroupBox("Smoothing", self.scrollAreaWidgetContents_5)
         self.groupBox_SpectrumSmooth.setObjectName("groupBox_SpectrumSmooth")
-        self.formLayout_SpectrumSmooth = QtWidgets.QFormLayout(self.groupBox_SpectrumSmooth)
-        self.formLayout_SpectrumSmooth.setContentsMargins(12, 12, 12, 12)
-        self.formLayout_SpectrumSmooth.setHorizontalSpacing(16)
-        self.formLayout_SpectrumSmooth.setVerticalSpacing(10)
+        self.gridLayout_SpectrumSmooth = QtWidgets.QGridLayout(self.groupBox_SpectrumSmooth)
+        self.gridLayout_SpectrumSmooth.setContentsMargins(12, 12, 12, 12)
+        self.gridLayout_SpectrumSmooth.setHorizontalSpacing(12)
+        self.gridLayout_SpectrumSmooth.setVerticalSpacing(10)
+
+        smoothing_spin_policy = QtWidgets.QSizePolicy(
+            QtWidgets.QSizePolicy.Fixed, QtWidgets.QSizePolicy.Fixed)
+        smoothing_spin_width = 120
 
         self.label_SpectrumDespike = QtWidgets.QLabel("Despike kernel", self.groupBox_SpectrumSmooth)
         self.spinBox_SpectrumDespike = QtWidgets.QSpinBox(self.groupBox_SpectrumSmooth)
@@ -1742,6 +1961,10 @@ class MainWindow(QtWidgets.QMainWindow, Ui_MainWindow):
         self.spinBox_SpectrumDespike.setValue(0)
         self.spinBox_SpectrumDespike.setKeyboardTracking(False)
         self.spinBox_SpectrumDespike.setStyle(SpinBoxFixStyle())
+        self.spinBox_SpectrumDespike.setAlignment(QtCore.Qt.AlignRight)
+        self.spinBox_SpectrumDespike.setSizePolicy(smoothing_spin_policy)
+        self.spinBox_SpectrumDespike.setMinimumWidth(smoothing_spin_width)
+        self.spinBox_SpectrumDespike.setMaximumWidth(smoothing_spin_width)
         self.spinBox_SpectrumDespike.setToolTip("Median despike kernel. Use 0 for off, otherwise odd values such as 3 or 5.")
 
         self.label_SpectrumSGWindow = QtWidgets.QLabel("SG window", self.groupBox_SpectrumSmooth)
@@ -1753,6 +1976,10 @@ class MainWindow(QtWidgets.QMainWindow, Ui_MainWindow):
         self.spinBox_SpectrumSGWindow.setValue(0)
         self.spinBox_SpectrumSGWindow.setKeyboardTracking(False)
         self.spinBox_SpectrumSGWindow.setStyle(SpinBoxFixStyle())
+        self.spinBox_SpectrumSGWindow.setAlignment(QtCore.Qt.AlignRight)
+        self.spinBox_SpectrumSGWindow.setSizePolicy(smoothing_spin_policy)
+        self.spinBox_SpectrumSGWindow.setMinimumWidth(smoothing_spin_width)
+        self.spinBox_SpectrumSGWindow.setMaximumWidth(smoothing_spin_width)
         self.spinBox_SpectrumSGWindow.setToolTip("Savitzky-Golay window length. Use 0 for off, otherwise odd values.")
 
         self.label_SpectrumSGPoly = QtWidgets.QLabel("SG polyorder", self.groupBox_SpectrumSmooth)
@@ -1763,14 +1990,22 @@ class MainWindow(QtWidgets.QMainWindow, Ui_MainWindow):
         self.spinBox_SpectrumSGPoly.setValue(3)
         self.spinBox_SpectrumSGPoly.setKeyboardTracking(False)
         self.spinBox_SpectrumSGPoly.setStyle(SpinBoxFixStyle())
+        self.spinBox_SpectrumSGPoly.setAlignment(QtCore.Qt.AlignRight)
+        self.spinBox_SpectrumSGPoly.setSizePolicy(smoothing_spin_policy)
+        self.spinBox_SpectrumSGPoly.setMinimumWidth(smoothing_spin_width)
+        self.spinBox_SpectrumSGPoly.setMaximumWidth(smoothing_spin_width)
         self.spinBox_SpectrumSGPoly.setToolTip("Savitzky-Golay polynomial order.")
 
-        self.formLayout_SpectrumSmooth.addRow(self.label_SpectrumDespike, self.spinBox_SpectrumDespike)
-        self.formLayout_SpectrumSmooth.addRow(self.label_SpectrumSGWindow, self.spinBox_SpectrumSGWindow)
-        self.formLayout_SpectrumSmooth.addRow(self.label_SpectrumSGPoly, self.spinBox_SpectrumSGPoly)
+        self.gridLayout_SpectrumSmooth.addWidget(self.label_SpectrumDespike, 0, 0, 1, 1)
+        self.gridLayout_SpectrumSmooth.addWidget(self.spinBox_SpectrumDespike, 0, 2, 1, 1)
+        self.gridLayout_SpectrumSmooth.addWidget(self.label_SpectrumSGWindow, 1, 0, 1, 1)
+        self.gridLayout_SpectrumSmooth.addWidget(self.spinBox_SpectrumSGWindow, 1, 2, 1, 1)
+        self.gridLayout_SpectrumSmooth.addWidget(self.label_SpectrumSGPoly, 2, 0, 1, 1)
+        self.gridLayout_SpectrumSmooth.addWidget(self.spinBox_SpectrumSGPoly, 2, 2, 1, 1)
         self.pushButton_SpectrumRaw = QtWidgets.QPushButton("Go back to raw", self.groupBox_SpectrumSmooth)
         self.pushButton_SpectrumRaw.setObjectName("pushButton_SpectrumRaw")
-        self.formLayout_SpectrumSmooth.addRow(self.pushButton_SpectrumRaw)
+        self.gridLayout_SpectrumSmooth.addWidget(self.pushButton_SpectrumRaw, 3, 0, 1, 3)
+        self.gridLayout_SpectrumSmooth.setColumnStretch(1, 1)
         self.verticalLayout_21.insertWidget(3, self.groupBox_SpectrumSmooth)
 
     def about(self):
