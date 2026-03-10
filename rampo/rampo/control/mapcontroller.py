@@ -12,6 +12,7 @@ import matplotlib.patches as mpatches
 from .ramaniohelpers import (
     load_spectrum_xy,
 )
+from ..utils import open_spectrum_file_dialog
 from ..ds_ramspec import Spectrum
 
 
@@ -132,12 +133,16 @@ class MapController(object):
             self.widget.label_MapLoaded.setText(f"Loaded: {len(self._chi_files)}")
 
     def _load_spectrum_files(self):
-        files, _ = QtWidgets.QFileDialog.getOpenFileNames(
+        files = open_spectrum_file_dialog(
             self.widget,
             "Select SPE files for map",
             self.model.chi_path,
-            "Spectra (*.spe *.SPE *.chi)",
-        )
+            prefer_raw=bool(
+                getattr(self.widget, "checkBox_PreferRawSpe", None) and
+                self.widget.checkBox_PreferRawSpe.isChecked()),
+            include_chi=True,
+            label="Spectra",
+            multi=True)
         if not files:
             return
 
@@ -293,7 +298,7 @@ class MapController(object):
         if (x < 0) or (y < 0) or (x >= nx) or (y >= ny):
             return None
         order = self.widget.comboBox_MapOrder.currentText()
-        if order == "Snake":
+        if "Snake" in order:
             if (y % 2) == 0:
                 i = y * nx + x
             else:
@@ -307,7 +312,7 @@ class MapController(object):
         order = self.widget.comboBox_MapOrder.currentText()
         y = idx // nx
         x = idx % nx
-        if order == "Snake" and ((y % 2) == 1):
+        if ("Snake" in order) and ((y % 2) == 1):
             x = nx - 1 - x
         return int(x), int(y)
 

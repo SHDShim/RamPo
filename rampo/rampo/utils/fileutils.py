@@ -5,6 +5,7 @@ import re
 import os
 import shutil
 import collections
+from qtpy import QtWidgets
 
 def get_unique_filename(filename):
     """Generate a unique filename by appending a number 
@@ -136,6 +137,101 @@ def get_sorted_filelist(path, search_ext='*.chi', sorted_by_name=True):
         return sorted(filelist, key=_filename_sort_key)
     else:  # sorted by time
         return sorted(filelist, key=os.path.getmtime)
+
+
+def has_raw_spe_files(path):
+    if (path is None) or (not os.path.isdir(path)):
+        return False
+    try:
+        for entry in os.scandir(path):
+            if entry.is_file() and entry.name.lower().endswith("-raw.spe"):
+                return True
+    except Exception:
+        return False
+    return False
+
+
+def get_preferred_spe_patterns(path, prefer_raw=False):
+    if prefer_raw and has_raw_spe_files(path):
+        return ["*-raw.spe", "*-raw.SPE"]
+    return ["*.spe", "*.SPE"]
+
+
+def build_spectrum_name_filter(
+        path,
+        prefer_raw=False,
+        include_chi=True,
+        include_manifest=False,
+        label="Spectra"):
+    patterns = []
+    if include_chi:
+        patterns.extend(["*.chi", "*.CHI"])
+    patterns.extend(get_preferred_spe_patterns(path, prefer_raw=prefer_raw))
+    if include_manifest:
+        patterns.append("*rampo_manifest.json")
+    return f"{label} ({' '.join(patterns)})"
+
+
+def open_spectrum_file_dialog(
+        parent,
+        title,
+        start_dir,
+        prefer_raw=False,
+        include_chi=True,
+        include_manifest=False,
+        label="Spectra",
+        multi=False):
+    dialog = QtWidgets.QFileDialog(parent, title, start_dir or "")
+    dialog.setOption(QtWidgets.QFileDialog.DontUseNativeDialog, True)
+    dialog.setFileMode(
+        QtWidgets.QFileDialog.ExistingFiles if multi
+        else QtWidgets.QFileDialog.ExistingFile)
+
+    def _update_name_filter(path):
+        current_dir = path if os.path.isdir(path) else os.path.dirname(path)
+        active_dir = current_dir or start_dir or ""
+        name_filter = build_spectrum_name_filter(
+            active_dir,
+            prefer_raw=prefer_raw,
+            include_chi=include_chi,
+            include_manifest=include_manifest,
+            label=label,
+        )
+        dialog.setNameFilter(name_filter)
+        dialog.selectNameFilter(name_filter)
+
+    _update_name_filter(start_dir)
+    dialog.directoryEntered.connect(_update_name_filter)
+
+    if dialog.exec():
+        selected = dialog.selectedFiles()
+        if multi:
+            return selected
+        return selected[0] if selected else ""
+    return [] if multi else ""
+
+
+def get_spectrum_filelist(path, sorted_by_name=True, prefer_raw=False):
+    patterns = ["*.chi", "*.CHI"]
+    patterns.extend(get_preferred_spe_patterns(path, prefer_raw=prefer_raw))
+    seen = set()
+    filelist = []
+    for pattern in patterns:
+        for filen in get_sorted_filelist(
+                path,
+                sorted_by_name=sorted_by_name,
+                search_ext=pattern):
+            if filen in seen:
+                continue
+            seen.add(filen)
+            filelist.append(filen)
+    if sorted_by_name:
+        filelist = sorted(
+            filelist,
+            key=lambda filen: os.path.basename(filen).lower())
+    else:
+        filelist = sorted(filelist, key=os.path.getmtime)
+    return filelist
 
 
 def samefilename(filen1, filen2):

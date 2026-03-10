@@ -1,7 +1,7 @@
 import os
 from qtpy import QtWidgets
 from ..utils import get_sorted_filelist, find_from_filelist, readchi, \
-    make_filename, writechi, get_directory
+    make_filename, writechi, get_directory, open_spectrum_file_dialog
 from ..utils import undo_button_press, get_temp_dir
 import datetime
 from .mplcontroller import MplController
@@ -28,9 +28,16 @@ class BaseSpectrumController(object):
         """
         opens a file select dialog
         """
-        filen = QtWidgets.QFileDialog.getOpenFileName(
-            self.widget, "Open an SPE or CHI File", self.model.chi_path,
-            "Data files (*.spe *.SPE *.chi)")[0]
+        filen = open_spectrum_file_dialog(
+            self.widget,
+            "Open an SPE or CHI File",
+            self.model.chi_path,
+            prefer_raw=bool(
+                getattr(self.widget, "checkBox_PreferRawSpe", None) and
+                self.widget.checkBox_PreferRawSpe.isChecked()),
+            include_chi=True,
+            label="Data files",
+            multi=False)
         self._setshow_new_base_ptn(str(filen))
 
     def load_new_base_pattern_from_name(self):

@@ -10,7 +10,8 @@ from .waterfalltablecontroller import WaterfallTableController
 from .jcpdstablecontroller import JcpdsTableController
 from .peakfittablecontroller import PeakfitTableController
 from .ccdprocesscontroller import CCDProcessController
-from ..utils import convert_wl_to_energy, get_temp_dir, make_filename
+from ..utils import convert_wl_to_energy, get_temp_dir, make_filename, \
+    open_spectrum_file_dialog
 from ..model.param_session_io import (
     save_model_to_param,
     load_model_from_param,
@@ -863,11 +864,17 @@ class SessionController(object):
         return self.load_dpp()
 
     def load_dpp(self):
-        fn = QtWidgets.QFileDialog.getOpenFileName(
+        fn = open_spectrum_file_dialog(
             self.widget,
             "Choose A Session File",
             self.model.chi_path,
-            "Session files (*.chi *.spe *rampo_manifest.json)")[0]
+            prefer_raw=bool(
+                getattr(self.widget, "checkBox_PreferRawSpe", None) and
+                self.widget.checkBox_PreferRawSpe.isChecked()),
+            include_chi=True,
+            include_manifest=True,
+            label="Session files",
+            multi=False)
         if fn == '':
             return False
         success = self._load_new_param_session(fn)

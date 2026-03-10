@@ -27,7 +27,7 @@ from .mapcontroller import MapController
 from .sequencecontroller import SequenceController
 from ..utils import dialog_savefile, writechi, extract_extension, \
     convert_wl_to_energy, get_sorted_filelist, find_from_filelist, \
-    make_filename, get_directory, get_temp_dir
+    make_filename, get_directory, get_temp_dir, get_spectrum_filelist
 from ..ds_ramspec import get_data_section
 #from utils import readchi, make_filename, writechi
 
@@ -542,6 +542,10 @@ class MainController(object):
             self.settings.setValue(
                 'spectrum_smoothing_sg_polyorder',
                 int(self.widget.spinBox_SpectrumSGPoly.value()))
+        if hasattr(self.widget, "checkBox_PreferRawSpe"):
+            self.settings.setValue(
+                'prefer_raw_spe',
+                bool(self.widget.checkBox_PreferRawSpe.isChecked()))
         # CHI navigation carry-over policy
         nav_keys = [
             ("carry_nav_jcpds", "checkBox_CarryNavJCPDS"),
@@ -611,6 +615,10 @@ class MainController(object):
             except Exception:
                 sg_poly = 3
             self.widget.spinBox_SpectrumSGPoly.setValue(sg_poly)
+        if hasattr(self.widget, "checkBox_PreferRawSpe"):
+            raw = self.settings.value('prefer_raw_spe', True)
+            val = str(raw).lower() in ("1", "true", "yes") if isinstance(raw, str) else bool(raw)
+            self.widget.checkBox_PreferRawSpe.setChecked(val)
         if hasattr(self.widget, "spinBox_SpectrumDespike"):
             self.apply_spectrum_smoothing()
         nav_defaults = {
@@ -1817,24 +1825,13 @@ class MainController(object):
 
     def _get_spectrum_filelist(self):
         sorted_by_name = self.widget.radioButton_SortbyNme.isChecked()
-        patterns = ("*.spe", "*.SPE", "*.chi", "*.CHI")
-        seen = set()
-        filelist = []
-        for pattern in patterns:
-            for filen in get_sorted_filelist(
-                    self.model.chi_path,
-                    sorted_by_name=sorted_by_name,
-                    search_ext=pattern):
-                if filen not in seen:
-                    seen.add(filen)
-                    filelist.append(filen)
-        if sorted_by_name:
-            filelist = sorted(
-                filelist,
-                key=lambda filen: os.path.basename(filen).lower())
-        else:
-            filelist = sorted(filelist, key=os.path.getmtime)
-        return filelist
+        prefer_raw = bool(
+            getattr(self.widget, "checkBox_PreferRawSpe", None) and
+            self.widget.checkBox_PreferRawSpe.isChecked())
+        return get_spectrum_filelist(
+            self.model.chi_path,
+            sorted_by_name=sorted_by_name,
+            prefer_raw=prefer_raw)
 
     def _find_current_spectrum_index(self, filelist):
         if (not self.model.base_ptn_exist()) or (filelist == []):

@@ -5,7 +5,7 @@ from qtpy import QtCore
 from qtpy import QtGui
 from .mplcontroller import MplController
 from .waterfalltablecontroller import WaterfallTableController
-from ..utils import get_directory, get_temp_dir
+from ..utils import get_directory, get_temp_dir, open_spectrum_file_dialog
 from ..ds_ramspec import PatternPeakPo, Spectrum
 
 
@@ -178,10 +178,16 @@ class WaterfallController(object):
                 self.widget, "Warning",
                 "Pick a base pattern first.")
             return
-        f_input = QtWidgets.QFileDialog.getOpenFileNames(
-            self.widget, "Choose additional data files", self.model.chi_path,
-            "Data files (*.spe *.SPE *.chi)")
-        files = f_input[0]
+        files = open_spectrum_file_dialog(
+            self.widget,
+            "Choose additional data files",
+            self.model.chi_path,
+            prefer_raw=bool(
+                getattr(self.widget, "checkBox_PreferRawSpe", None) and
+                self.widget.checkBox_PreferRawSpe.isChecked()),
+            include_chi=True,
+            label="Data files",
+            multi=True)
         self._add_patterns(files)
 
     def _add_patterns(self, files):

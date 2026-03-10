@@ -7,7 +7,7 @@ from ..model import PeakPoModel8
 from ..model.diff_state import DiffState
 from ..model.param_session_io import load_model_from_param
 from ..ds_ramspec import Spectrum
-from ..utils import readchi, writechi, get_temp_dir
+from ..utils import readchi, writechi, get_temp_dir, open_spectrum_file_dialog
 
 
 class DiffController(object):
@@ -174,12 +174,16 @@ class DiffController(object):
 
     def _browse_ref_chi(self):
         start_dir = self.model.chi_path if self.model.chi_path else ""
-        filen = QtWidgets.QFileDialog.getOpenFileName(
+        filen = open_spectrum_file_dialog(
             self.widget,
             "Choose Reference Spectrum",
             start_dir,
-            "Spectra (*.spe *.SPE *.chi)",
-        )[0]
+            prefer_raw=bool(
+                getattr(self.widget, "checkBox_PreferRawSpe", None) and
+                self.widget.checkBox_PreferRawSpe.isChecked()),
+            include_chi=True,
+            label="Spectra",
+            multi=False)
         if filen == "":
             return
         self.widget.lineEdit_DiffRefChi.setText(str(filen))

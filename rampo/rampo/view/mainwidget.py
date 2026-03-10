@@ -136,6 +136,7 @@ class MainWindow(QtWidgets.QMainWindow, Ui_MainWindow):
         self._setup_ccd_roi_group()
         self._reorder_spectrum_process_groups()
         self._setup_plot_config_python_export()
+        self._setup_file_data_controls()
         self._move_backup_into_file_data_tab()
         self._setup_backup_comment_button()
         self._layout_backup_buttons()
@@ -184,8 +185,6 @@ class MainWindow(QtWidgets.QMainWindow, Ui_MainWindow):
             self.groupBox_2.setVisible(False)
         if hasattr(self, "groupBox_10"):
             self.groupBox_10.setVisible(False)
-        if hasattr(self, "groupBox_36"):
-            self.groupBox_36.setVisible(False)
         if hasattr(self, "groupBox_23"):
             self.groupBox_23.setVisible(False)
         if hasattr(self, "groupBox_14"):
@@ -1027,8 +1026,8 @@ class MainWindow(QtWidgets.QMainWindow, Ui_MainWindow):
         self.label_MapOrder.setVisible(False)
         self.comboBox_MapOrder = QtWidgets.QComboBox(self.groupBox_MapLoad)
         self.comboBox_MapOrder.setObjectName("comboBox_MapOrder")
-        self.comboBox_MapOrder.addItems(["Row-major", "Snake"])
-        self.comboBox_MapOrder.setCurrentText("Snake")
+        self.comboBox_MapOrder.addItems(["Raw-major (ASU)", "Snake (APS)"])
+        self.comboBox_MapOrder.setCurrentText("Snake (APS)")
         self.comboBox_MapOrder.setMinimumSize(QtCore.QSize(110, 28))
         self.comboBox_MapOrder.setMaximumWidth(150)
         self.gridLayout_MapLoad.addWidget(self.pushButton_MapLoadChi, 0, 0, 1, 1)
@@ -1470,6 +1469,21 @@ class MainWindow(QtWidgets.QMainWindow, Ui_MainWindow):
         idx_backup = self.tabWidget_3.indexOf(self.tabWidget_3Page3)
         if idx_backup >= 0:
             self.tabWidget_3.removeTab(idx_backup)
+
+    def _setup_file_data_controls(self):
+        if (not hasattr(self, "groupBox_36")) or (not hasattr(self, "gridLayout_21")):
+            return
+        self.groupBox_36.setVisible(True)
+        self.groupBox_36.setTitle("Raw image handling")
+        if hasattr(self, "checkBox_PreferRawSpe"):
+            return
+        self.checkBox_PreferRawSpe = QtWidgets.QCheckBox(self.groupBox_36)
+        self.checkBox_PreferRawSpe.setObjectName("checkBox_PreferRawSpe")
+        self.checkBox_PreferRawSpe.setChecked(True)
+        self.checkBox_PreferRawSpe.setText("Prefer -raw.spe files")
+        self.checkBox_PreferRawSpe.setToolTip(
+            "When -raw.spe files exist in the current folder, show and navigate those SPE files instead of generic .spe files.")
+        self.gridLayout_21.addWidget(self.checkBox_PreferRawSpe, 0, 0, 1, 1)
 
     def _layout_backup_buttons(self):
         if not hasattr(self, "horizontalLayout_BackupTools"):

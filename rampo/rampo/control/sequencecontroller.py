@@ -7,6 +7,7 @@ from matplotlib.backends.backend_qtagg import FigureCanvasQTAgg
 from matplotlib.widgets import RectangleSelector
 from matplotlib.ticker import MaxNLocator, FormatStrFormatter
 
+from ..utils import open_spectrum_file_dialog
 from ..ds_ramspec import Spectrum
 
 
@@ -88,12 +89,16 @@ class SequenceController(object):
             self.widget.label_SeqLoaded.setText(f"Loaded: {len(self._chi_files)}")
 
     def _load_chi_files(self):
-        files, _ = QtWidgets.QFileDialog.getOpenFileNames(
+        files = open_spectrum_file_dialog(
             self.widget,
             "Select spectra for sequence",
             self.model.chi_path,
-            "Spectra (*.spe *.SPE *.chi)",
-        )
+            prefer_raw=bool(
+                getattr(self.widget, "checkBox_PreferRawSpe", None) and
+                self.widget.checkBox_PreferRawSpe.isChecked()),
+            include_chi=True,
+            label="Spectra",
+            multi=True)
         if not files:
             return
 
