@@ -77,75 +77,107 @@ class BaseSpectrumController(object):
         """
         load and process base pattern.  does not signal to update_graph
         """
-        if self.session_ctrl is not None:
-            # Reset carry-over provenance for generic/manual loads.
-            self.session_ctrl.set_carryover_source_chi(None)
+        sticky_ccd_roi = self._capture_carried_ccd_roi()
         main_ctrl = getattr(self.widget, "_main_controller", None)
-        use_wavenumber = True
-        if main_ctrl is not None and hasattr(main_ctrl, "spectrum_uses_wavenumber"):
-            try:
-                use_wavenumber = bool(main_ctrl.spectrum_uses_wavenumber())
-            except Exception:
-                use_wavenumber = True
-        self.model.set_base_ptn(
-            new_filename,
-            self.widget.doubleSpinBox_SetWavelength.value(),
-            use_wavenumber=use_wavenumber)
-        # self.widget.textEdit_DiffractionPatternFileName.setText(
-        #    '1D Pattern: ' + self.model.get_base_ptn_filename())
-        self.widget.lineEdit_DiffractionPatternFileName.setText(
-            str(self.model.get_base_ptn_filename()))
-        # Prefer loading full PARAM session state when available for this CHI.
-        if self.session_ctrl is not None:
-            loaded_param = self.session_ctrl.autoload_param_for_chi(new_filename)
-            if loaded_param:
-                if self.ccd_ctrl._is_spe_source():
-                    try:
-                        self.ccd_ctrl.process_temp_ccd()
-                    except Exception:
-                        pass
-                # Ensure File > Data backup table reflects the newly loaded CHI
-                # immediately, without requiring tab changes.
-                self.session_ctrl.refresh_backup_table()
-                print(str(datetime.datetime.now())[:-7],
-                    ': Loaded PARAM session for this CHI.')
-                return
-        print(str(datetime.datetime.now())[:-7], 
-                ": Receive request to open ", 
+        if main_ctrl is not None:
+            main_ctrl._pending_ccd_roi_carry = sticky_ccd_roi
+        try:
+            if self.session_ctrl is not None:
+                # Reset carry-over provenance for generic/manual loads.
+                self.session_ctrl.set_carryover_source_chi(None)
+            use_wavenumber = True
+            if main_ctrl is not None and hasattr(main_ctrl, "spectrum_uses_wavenumber"):
+                try:
+                    use_wavenumber = bool(main_ctrl.spectrum_uses_wavenumber())
+                except Exception:
+                    use_wavenumber = True
+            self.model.set_base_ptn(
+                new_filename,
+                self.widget.doubleSpinBox_SetWavelength.value(),
+                use_wavenumber=use_wavenumber)
+            self.widget.lineEdit_DiffractionPatternFileName.setText(
                 str(self.model.get_base_ptn_filename()))
-        temp_dir = get_temp_dir(self.model.get_base_ptn_filename())
-        if True:
-            if os.path.exists(temp_dir):
-                success = self.model.base_ptn.read_bg_from_tempfile(
-                    temp_dir=temp_dir)
-                if success:
-                    self._update_bg_params_in_widget()
-                    print(str(datetime.datetime.now())[:-7], 
-                        ': Read temp chi successfully.')
+            # Prefer loading full PARAM session state when available for this CHI.
+            if self.session_ctrl is not None:
+                loaded_param = self.session_ctrl.autoload_param_for_chi(new_filename)
+                if loaded_param:
+                    if self.ccd_ctrl._is_spe_source():
+                        try:
+                            self.ccd_ctrl.process_temp_ccd()
+                            self._restore_carried_ccd_roi(sticky_ccd_roi)
+                        except Exception:
+                            pass
+                    # Ensure File > Data backup table reflects the newly loaded CHI
+                    # immediately, without requiring tab changes.
+                    self.session_ctrl.refresh_backup_table()
+                    print(str(datetime.datetime.now())[:-7],
+                        ': Loaded PARAM session for this CHI.')
+                    return
+            print(str(datetime.datetime.now())[:-7],
+                    ": Receive request to open ",
+                    str(self.model.get_base_ptn_filename()))
+            temp_dir = get_temp_dir(self.model.get_base_ptn_filename())
+            if True:
+                if os.path.exists(temp_dir):
+                    success = self.model.base_ptn.read_bg_from_tempfile(
+                        temp_dir=temp_dir)
+                    if success:
+                        self._update_bg_params_in_widget()
+                        print(str(datetime.datetime.now())[:-7],
+                            ': Read temp chi successfully.')
+                    else:
+                        self._update_bgsub_from_current_values()
+                        print(str(datetime.datetime.now())[:-7],
+                            ': No temp chi file found. Force new bgsub fit.')
                 else:
+                    os.makedirs(temp_dir)
                     self._update_bgsub_from_current_values()
-                    print(str(datetime.datetime.now())[:-7], 
+                    print(str(datetime.datetime.now())[:-7],
                         ': No temp chi file found. Force new bgsub fit.')
-            else:
-                os.makedirs(temp_dir)
-                self._update_bgsub_from_current_values()
-                print(str(datetime.datetime.now())[:-7], 
-                    ': No temp chi file found. Force new bgsub fit.')
-        if (not self.ccd_ctrl._is_spe_source()) and \
-                (not self.model.associated_image_exists()) and \
-                (not self.ccd_ctrl._ignore_raw_data_missing()):
-            return
+            if (not self.ccd_ctrl._is_spe_source()) and \
+                    (not self.model.associated_image_exists()) and \
+                    (not self.ccd_ctrl._ignore_raw_data_missing()):
+                return
 
-        success = self.ccd_ctrl.process_temp_ccd()
-        if (not success) and \
-                self.ccd_ctrl._ignore_raw_data_missing() and \
-                (not self.model.associated_image_exists()):
-            QtWidgets.QMessageBox.warning(
-                self.widget, 'Warning',
-                'Rampo cannot process the CCD view: no raw image and no existing cached files were found.')
-        # Keep backup table in File > Data synchronized right after CHI load.
-        if self.session_ctrl is not None:
-            self.session_ctrl.refresh_backup_table()
+            success = self.ccd_ctrl.process_temp_ccd()
+            self._restore_carried_ccd_roi(sticky_ccd_roi)
+            if (not success) and \
+                    self.ccd_ctrl._ignore_raw_data_missing() and \
+                    (not self.model.associated_image_exists()):
+                QtWidgets.QMessageBox.warning(
+                    self.widget, 'Warning',
+                    'Rampo cannot process the CCD view: no raw image and no existing cached files were found.')
+            # Keep backup table in File > Data synchronized right after CHI load.
+            if self.session_ctrl is not None:
+                self.session_ctrl.refresh_backup_table()
+        finally:
+            if main_ctrl is not None:
+                main_ctrl._pending_ccd_roi_carry = None
+
+    def _capture_carried_ccd_roi(self):
+        main_ctrl = getattr(self.widget, "_main_controller", None)
+        if main_ctrl is None or \
+                (not hasattr(self.widget, "checkBox_CarryNavCCDRoi")) or \
+                (not self.widget.checkBox_CarryNavCCDRoi.isChecked()):
+            return None
+        if (not hasattr(self.widget, "spinBox_CCDRowMin")) or \
+                (not hasattr(self.widget, "spinBox_CCDRowMax")):
+            return None
+        return (
+            int(self.widget.spinBox_CCDRowMin.value()),
+            int(self.widget.spinBox_CCDRowMax.value()),
+        )
+
+    def _restore_carried_ccd_roi(self, sticky_ccd_roi):
+        if sticky_ccd_roi is None:
+            return
+        try:
+            self.ccd_ctrl.apply_row_roi(
+                sticky_ccd_roi[0],
+                sticky_ccd_roi[1],
+                refresh_plot=False)
+        except Exception:
+            pass
 
     def _update_bg_params_in_widget(self):
         self.widget.spinBox_BGParam1.setValue(

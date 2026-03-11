@@ -404,6 +404,18 @@ class SessionController(object):
                 if "log_y" in hist:
                     self.widget.ccd_hist_widget.check_log.setChecked(bool(hist["log_y"]))
         ccd_roi = (ui_state or {}).get("ccd_roi", {})
+        main_ctrl = getattr(self.widget, "_main_controller", None)
+        pending_ccd_roi = getattr(main_ctrl, "_pending_ccd_roi_carry", None)
+        carry_ccd_roi = bool(
+            hasattr(self.widget, "checkBox_CarryNavCCDRoi") and
+            self.widget.checkBox_CarryNavCCDRoi.isChecked() and
+            pending_ccd_roi is not None
+        )
+        if carry_ccd_roi:
+            ccd_roi = {
+                "row_min": int(pending_ccd_roi[0]),
+                "row_max": int(pending_ccd_roi[1]),
+            }
         raw_image = getattr(getattr(self.model, "base_ptn", None), "raw_image", None)
         has_multirow_ccd = (
             raw_image is not None and

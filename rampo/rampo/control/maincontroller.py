@@ -39,6 +39,7 @@ class MainController(object):
         self._defer_plot_update_count = 0
         self._peak_pick_press_x = None
         self._peak_pick_preview = None
+        self._pending_ccd_roi_carry = None
 
         self.widget = MainWindow()
         self.widget._main_controller = self
@@ -979,9 +980,10 @@ class MainController(object):
         from matplotlib.backend_bases import key_press_handler
         
         if event.key == 'i':
-            if self.widget.mpl.ntb._active == 'PAN':
+            mode = self._toolbar_mode_text(self.widget.mpl.ntb)
+            if mode in ('pan/zoom', 'pan'):
                 self.widget.mpl.ntb.pan()
-            if self.widget.mpl.ntb._active == 'ZOOM':
+            if mode in ('zoom rect', 'zoom'):
                 self.widget.mpl.ntb.zoom()
         elif event.key == 's':
             self.session_ctrl.save_dpp_ppss()

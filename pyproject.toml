@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "rampo"
-version = "0.3.0"
+dynamic = ["version"]
 description = "GUI application for Raman spectroscopy analysis in high-pressure experiments."
 readme = "README.md"
 requires-python = ">=3.10"
@@ -53,6 +53,9 @@ rampo = "rampo.__main__:main"
 
 [tool.setuptools]
 include-package-data = true
+
+[tool.setuptools.dynamic]
+version = {attr = "rampo.rampo.version.__version__"}
 
 [tool.setuptools.packages.find]
 include = ["rampo*"]

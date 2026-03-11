@@ -139,16 +139,28 @@ class CCDController(object):
             return False
         return bool(self.model.base_ptn.set_spe_row_roi(0, int(img.shape[0] - 1)))
 
-    def _apply_row_roi_to_spectrum(self):
+    def apply_row_roi(self, row_min, row_max, refresh_plot=True):
+        if (not hasattr(self.widget, "spinBox_CCDRowMin")) or \
+                (not hasattr(self.widget, "spinBox_CCDRowMax")):
+            return False
+        self.widget.spinBox_CCDRowMin.blockSignals(True)
+        self.widget.spinBox_CCDRowMax.blockSignals(True)
+        self.widget.spinBox_CCDRowMin.setValue(int(row_min))
+        self.widget.spinBox_CCDRowMax.setValue(int(row_max))
+        self.widget.spinBox_CCDRowMin.blockSignals(False)
+        self.widget.spinBox_CCDRowMax.blockSignals(False)
+        return self._apply_row_roi_to_spectrum(refresh_plot=refresh_plot)
+
+    def _apply_row_roi_to_spectrum(self, refresh_plot=True):
         if (not self.model.base_ptn_exist()) or \
                 (extract_extension(str(self.model.get_base_ptn_filename())).lower() != 'spe'):
-            return
+            return False
         if (not hasattr(self.widget, "spinBox_CCDRowMin")) or \
                 (getattr(self.model.base_ptn, "raw_image", None) is None):
-            return
+            return False
         raw_image = getattr(self.model.base_ptn, "raw_image", None)
         if np.ndim(raw_image) < 2 or raw_image.shape[0] <= 1:
-            return
+            return False
         row_min = int(self.widget.spinBox_CCDRowMin.value())
         row_max = int(self.widget.spinBox_CCDRowMax.value())
         if row_max < row_min:
@@ -170,9 +182,11 @@ class CCDController(object):
             self.widget.spinBox_CCDRowMax.blockSignals(False)
         success = self.model.base_ptn.set_spe_row_roi(row_min, row_max)
         if not success:
-            return
+            return False
         self._refresh_bgsub_for_current_spectrum()
-        self._apply_changes_to_graph()
+        if refresh_plot:
+            self._apply_changes_to_graph()
+        return True
 
     def _refresh_bgsub_for_current_spectrum(self):
         if not self.model.base_ptn_exist():

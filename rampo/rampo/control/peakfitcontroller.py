@@ -5,7 +5,7 @@ from qtpy import QtWidgets
 from .mplcontroller import MplController
 from .peakfittablecontroller import PeakfitTableController
 from ..utils import make_filename, get_temp_dir
-from ..model.param_session_io import load_section_from_param
+from ..model.param_session_io import load_section_from_param, is_new_param_folder
 
 
 class PeakFitController(object):
@@ -39,6 +39,15 @@ class PeakFitController(object):
             self.import_section_from_param)
         # The line below exist in session_ctrl
         # self.widget.pushButton_PkFtSectionSavetoDPP.clicked.coonect
+
+    def _toolbar_mode_text(self):
+        toolbar = getattr(getattr(self.widget, "mpl", None), "ntb", None)
+        if toolbar is None:
+            return ""
+        mode = getattr(toolbar, "mode", "")
+        if not mode:
+            mode = getattr(toolbar, "_active", "")
+        return str(mode or "").strip().lower()
 
     def import_section_from_param(self):
         if not self.model.base_ptn_exist():
@@ -174,6 +183,35 @@ class PeakFitController(object):
         # Reload selected section from PARAM CSV on demand so graph updates
         # reflect persisted section data (not stale in-memory copies).
         if self.model.base_ptn_exist():
+            param_dir = get_temp_dir(self.model.get_base_ptn_filename(), branch='-rampo')
+            if not is_new_param_folder(param_dir):
+                reply = QtWidgets.QMessageBox.question(
+                    self.widget, 'Save First',
+                    'No Rampo session folder exists for this spectrum.\n'
+                    'Save the result first, then continue with Set to current?',
+                    QtWidgets.QMessageBox.Yes | QtWidgets.QMessageBox.No,
+                    QtWidgets.QMessageBox.Yes)
+                if reply == QtWidgets.QMessageBox.No:
+                    return
+                main_ctrl = getattr(self.widget, "_main_controller", None)
+                session_ctrl = getattr(main_ctrl, "session_ctrl", None)
+                if session_ctrl is None:
+                    QtWidgets.QMessageBox.warning(
+                        self.widget, "Warning",
+                        "Cannot save the result because the session controller is unavailable.")
+                    return
+                try:
+                    session_ctrl.save_dpp(quiet=True)
+                except Exception as inst:
+                    QtWidgets.QMessageBox.warning(
+                        self.widget, "Warning",
+                        "Saving the result failed:\n" + str(inst))
+                    return
+                if not is_new_param_folder(param_dir):
+                    QtWidgets.QMessageBox.warning(
+                        self.widget, "Warning",
+                        "The Rampo session folder was not created. Save the result first.")
+                    return
             try:
                 section_disk = load_section_from_param(
                     self.model.get_base_ptn_filename(), idx)
@@ -302,9 +340,10 @@ class PeakFitController(object):
             self.widget.pushButton_AddRemoveFromMouse.setChecked(True)
 
     def release_mouse_from_peak_input(self):
-        if self.widget.mpl.ntb._active == 'PAN':
+        mode = self._toolbar_mode_text()
+        if mode in ('pan/zoom', 'pan'):
             self.widget.mpl.ntb.pan()
-        if self.widget.mpl.ntb._active == 'ZOOM':
+        if mode in ('zoom rect', 'zoom'):
             self.widget.mpl.ntb.zoom()
         self.widget.pushButton_AddRemoveFromMouse.setChecked(False)
         return
