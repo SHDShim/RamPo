@@ -51,6 +51,12 @@ class BaseSpectrumController(object):
         """
         if os.path.exists(filen):
             self.model.set_chi_path(os.path.split(filen)[0])
+            main_ctrl = getattr(self.widget, "_main_controller", None)
+            if main_ctrl is not None and hasattr(main_ctrl, "write_setting"):
+                try:
+                    main_ctrl.write_setting()
+                except Exception:
+                    pass
             if self.model.base_ptn_exist():
                 old_filename = self.model.get_base_ptn_filename()
             else:

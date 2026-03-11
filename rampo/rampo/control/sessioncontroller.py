@@ -499,7 +499,14 @@ class SessionController(object):
             self._restore_background_ui_from_model()
             self.update_inputs()
         self._sync_peakfit_selection_to_current_section()
-        self.plot_ctrl.zoom_out_graph()
+        main_ctrl = getattr(self.widget, "_main_controller", None)
+        defer_plot = (
+            main_ctrl is not None and
+            hasattr(main_ctrl, "_plot_update_deferred") and
+            bool(main_ctrl._plot_update_deferred())
+        )
+        if not defer_plot:
+            self.plot_ctrl.zoom_out_graph()
 
     @contextmanager
     def _block_plot_ui_signals(self):

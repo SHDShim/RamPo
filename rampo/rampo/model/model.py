@@ -334,7 +334,16 @@ class PeakPoModel(object):
         raise NotImplementedError("PPSS import was removed. Use the JSON session folder.")
 
     def set_chi_path(self, chi_path):
-        self.chi_path = chi_path
+        path = "" if chi_path is None else str(chi_path).strip()
+        if path == "" or path.lower() == "none":
+            self.chi_path = os.getcwd()
+            return
+        if os.path.isfile(path):
+            path = os.path.dirname(path)
+        path = os.path.abspath(os.path.expanduser(path))
+        if not os.path.isdir(path):
+            path = os.getcwd()
+        self.chi_path = path
 
     def set_jcpds_path(self, jcpds_path):
         self.jcpds_path = jcpds_path

@@ -513,13 +513,58 @@ class MainController(object):
             except Exception:
                 pass
 
-    def _refresh_after_navigation(self):
+    def _capture_navigation_plot_state(self):
+        canvas = getattr(getattr(self.widget, "mpl", None), "canvas", None)
+        if canvas is None or (not hasattr(canvas, "ax_pattern")):
+            return None
+        state = {
+            "pattern_limits": tuple(canvas.ax_pattern.axis()),
+            "ccd_ylimits": None,
+            "ccd_zlimits": None,
+        }
+        if hasattr(canvas, "ax_ccd"):
+            try:
+                state["ccd_ylimits"] = tuple(canvas.ax_ccd.get_ylim())
+            except Exception:
+                state["ccd_ylimits"] = None
+        if hasattr(self.widget, "doubleSpinBox_CCDScaleMin") and \
+                hasattr(self.widget, "doubleSpinBox_CCDScaleMax"):
+            state["ccd_zlimits"] = (
+                float(self.widget.doubleSpinBox_CCDScaleMin.value()),
+                float(self.widget.doubleSpinBox_CCDScaleMax.value()),
+            )
+        return state
+
+    def _restore_navigation_plot_state(self, state):
+        if not state:
+            self.plot_ctrl.update()
+            self._refresh_navigation_overlays()
+            return
+        zlimits = state.get("ccd_zlimits")
+        if zlimits is not None and \
+                hasattr(self.widget, "doubleSpinBox_CCDScaleMin") and \
+                hasattr(self.widget, "doubleSpinBox_CCDScaleMax"):
+            vmin = float(zlimits[0])
+            vmax = float(zlimits[1])
+            if vmax <= vmin:
+                vmax = vmin + max(1e-6, 1e-6 * max(abs(vmin), 1.0))
+            self.widget.doubleSpinBox_CCDScaleMin.blockSignals(True)
+            self.widget.doubleSpinBox_CCDScaleMax.blockSignals(True)
+            self.widget.doubleSpinBox_CCDScaleMin.setValue(vmin)
+            self.widget.doubleSpinBox_CCDScaleMax.setValue(vmax)
+            self.widget.doubleSpinBox_CCDScaleMin.blockSignals(False)
+            self.widget.doubleSpinBox_CCDScaleMax.blockSignals(False)
+        self.plot_ctrl.update(
+            limits=state.get("pattern_limits"),
+            ccd_ylimits=state.get("ccd_ylimits"))
+        self._refresh_navigation_overlays()
+
+    def _refresh_after_navigation(self, plot_state=None):
         if hasattr(self.widget, "checkBox_AutoY") and \
                 self.widget.checkBox_AutoY.isChecked():
             self.plot_new_graph()
         else:
-            self.plot_ctrl.update()
-            self._refresh_navigation_overlays()
+            self._restore_navigation_plot_state(plot_state)
 
     def _refresh_navigation_overlays(self):
         if hasattr(self, "map_ctrl") and (self.map_ctrl is not None):
@@ -634,7 +679,8 @@ class MainController(object):
         """
         self.settings = QtCore.QSettings('DS', 'PeakPo')
         # self.settings.setFallbacksEnabled(False)
-        self.model.set_chi_path(self.settings.value('chi_path'))
+        saved_chi_path = self.settings.value('chi_path', os.getcwd())
+        self.model.set_chi_path(saved_chi_path)
         self.model.set_jcpds_path(self.settings.value('jcpds_path'))
         pnt_fs = str(self.settings.value(
             'fontsize_pt_label', self.widget.comboBox_PnTFontSize.currentText()))
@@ -1872,6 +1918,7 @@ class MainController(object):
 
     def _goto_chi_next_file(self, move):
         nav_state = self._capture_nav_carry_state()
+        plot_state = self._capture_navigation_plot_state()
         filelist_chi = self._get_spectrum_filelist()
         idx_chi = self._find_current_spectrum_index(filelist_chi)
 
@@ -1916,7 +1963,7 @@ class MainController(object):
                 self.base_ptn_ctrl._load_a_new_pattern(new_filename_chi)
                 self._apply_nav_carry_state(nav_state)
             # self.model.set_base_ptn_color(self.obj_color)
-            self._refresh_after_navigation()
+            self._refresh_after_navigation(plot_state=plot_state)
             self._schedule_post_navigation_overlay_refresh()
         else:
             QtWidgets.QMessageBox.warning(self.widget, "Warning",
@@ -1933,6 +1980,7 @@ class MainController(object):
             filen for filen in filelist_chi
             if os.path.exists(_session_manifest_for(filen))
         ]
+        plot_state = self._capture_navigation_plot_state()
 
         idx_chi = self._find_current_spectrum_index(filelist_chi)
         idx_session = self._find_current_spectrum_index(filelist_session)
@@ -2005,7 +2053,7 @@ class MainController(object):
                 self.base_ptn_ctrl._load_a_new_pattern(new_filename_chi)
                 self.session_ctrl.save_dpp(quiet=True)
                 self.model.clear_section_list()
-                self._refresh_after_navigation()
+                self._refresh_after_navigation(plot_state=plot_state)
                 self._schedule_post_navigation_overlay_refresh()
             else:
                 QtWidgets.QMessageBox.warning(
@@ -2032,7 +2080,7 @@ class MainController(object):
                     self.base_ptn_ctrl._load_a_new_pattern(new_filename_chi)
                     self.session_ctrl.save_dpp(quiet=True)
                     self.model.clear_section_list()
-                    self._refresh_after_navigation()
+                    self._refresh_after_navigation(plot_state=plot_state)
                     self._schedule_post_navigation_overlay_refresh()
                 else:
                     success = self.session_ctrl._load_dpp(new_manifest)
@@ -2044,7 +2092,7 @@ class MainController(object):
                             self.widget.pushButton_AddBasePtn.setChecked(False)
                         if self.widget.checkBox_ShowCCD.isChecked():
                             self.session_ctrl._load_ccd_format_file()
-                        self._refresh_after_navigation()
+                        self._refresh_after_navigation(plot_state=plot_state)
                         self._schedule_post_navigation_overlay_refresh()
                     else:
                         QtWidgets.QMessageBox.warning(
@@ -2061,7 +2109,7 @@ class MainController(object):
                         self.widget.pushButton_AddBasePtn.setChecked(False)
                     if self.widget.checkBox_ShowCCD.isChecked():
                         self.session_ctrl._load_ccd_format_file()
-                    self._refresh_after_navigation()
+                    self._refresh_after_navigation(plot_state=plot_state)
                     self._schedule_post_navigation_overlay_refresh()
                 else:
                     QtWidgets.QMessageBox.warning(

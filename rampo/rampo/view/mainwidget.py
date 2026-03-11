@@ -1960,6 +1960,28 @@ class MainWindow(QtWidgets.QMainWindow, Ui_MainWindow):
             self.pushButton_AddRemoveFromMouse.setText("Pick peaks")
             self.pushButton_AddRemoveFromMouse.setToolTip(
                 "Left click to add a peak, left drag to set peak width, right click to remove the nearest peak")
+        if hasattr(self, "groupBox_32") and hasattr(self, "gridLayout_18") and \
+                hasattr(self, "pushButton_AddRemoveFromMouse"):
+            if not hasattr(self, "label_PeakPickHelp"):
+                self.label_PeakPickHelp = QtWidgets.QLabel(self.groupBox_32)
+                self.label_PeakPickHelp.setObjectName("label_PeakPickHelp")
+                self.label_PeakPickHelp.setWordWrap(True)
+                self.label_PeakPickHelp.setText(
+                    "When on: left click to add, left drag to set width, right click to remove. Toggle back to normal when done.")
+                self.label_PeakPickHelp.setStyleSheet(
+                    "color: #cbd5e1; padding-top: 2px; padding-bottom: 4px;")
+                if hasattr(self, "pushButton_AddRemoveFromJlist"):
+                    self.gridLayout_18.removeWidget(self.pushButton_AddRemoveFromJlist)
+                    self.gridLayout_18.addWidget(
+                        self.pushButton_AddRemoveFromJlist, 3, 0, 1, 1)
+                if hasattr(self, "label_16"):
+                    self.gridLayout_18.removeWidget(self.label_16)
+                    self.gridLayout_18.addWidget(self.label_16, 3, 2, 1, 1)
+                if hasattr(self, "spinBox_PeaksFromJlistIntensity"):
+                    self.gridLayout_18.removeWidget(self.spinBox_PeaksFromJlistIntensity)
+                    self.gridLayout_18.addWidget(
+                        self.spinBox_PeaksFromJlistIntensity, 3, 3, 1, 1)
+                self.gridLayout_18.addWidget(self.label_PeakPickHelp, 2, 0, 1, 4)
         if hasattr(self, "doubleSpinBox_InitialFWHM"):
             self.doubleSpinBox_InitialFWHM.setValue(2.0)
             self.doubleSpinBox_InitialFWHM.hide()
