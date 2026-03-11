@@ -1506,14 +1506,18 @@ class MainController(object):
         else:
             disp_min = xmin
             disp_max = xmax
-        item_min = table.item(row, 0) or QtWidgets.QTableWidgetItem()
-        item_max = table.item(row, 1) or QtWidgets.QTableWidgetItem()
+        item_min = table.item(row, 0)
+        item_max = table.item(row, 1)
+        if item_min is None:
+            item_min = QtWidgets.QTableWidgetItem()
+            table.setItem(row, 0, item_min)
+        if item_max is None:
+            item_max = QtWidgets.QTableWidgetItem()
+            table.setItem(row, 1, item_max)
         item_min.setData(QtCore.Qt.UserRole, float(canonical_min))
         item_max.setData(QtCore.Qt.UserRole, float(canonical_max))
         item_min.setText(f"{disp_min:.3f}")
         item_max.setText(f"{disp_max:.3f}")
-        table.setItem(row, 0, item_min)
-        table.setItem(row, 1, item_max)
         self._set_background_table_unit_property(current_is_wavenumber)
 
     def _read_background_area_row(self, row, target_is_wavenumber=None):
