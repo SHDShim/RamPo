@@ -30,12 +30,12 @@ class CCDController(object):
             self.widget.pushButton_Info.clicked.connect(self.show_tif_header)
         if hasattr(self.widget, "pushButton_S_CCDReset"):
             self.widget.pushButton_S_CCDReset.clicked.connect(
-                self.reset_max_cake_scale)
-        self.widget.pushButton_ApplyCakeView.clicked.connect(self.update_cake)
+                self.reset_max_ccd_scale)
+        self.widget.pushButton_ApplyCCDView.clicked.connect(self.update_ccd)
         self.widget.pushButton_ApplyMask.clicked.connect(self.apply_mask)
         self.widget.pushButton_MaskReset.clicked.connect(self.reset_maskrange)
-        self.widget.pushButton_ResetCakeScale.clicked.connect(
-            self.reset_max_cake_scale)
+        self.widget.pushButton_ResetCCDScale.clicked.connect(
+            self.reset_max_ccd_scale)
         if hasattr(self.widget, "spinBox_CCDRowMin"):
             self.widget.spinBox_CCDRowMin.valueChanged.connect(
                 self._on_row_roi_spin_changed)
@@ -48,26 +48,26 @@ class CCDController(object):
         if hasattr(self.widget, "pushButton_CCDFullRoi"):
             self.widget.pushButton_CCDFullRoi.clicked.connect(
                 self._reset_row_roi_to_full)
-        if hasattr(self.widget, "comboBox_CakeColormap"):
-            self.widget.comboBox_CakeColormap.currentIndexChanged.connect(
+        if hasattr(self.widget, "comboBox_CCDColormap"):
+            self.widget.comboBox_CCDColormap.currentIndexChanged.connect(
                 self._apply_changes_to_graph)
         if hasattr(self.widget, "doubleSpinBox_CCDScaleMin"):
             self.widget.doubleSpinBox_CCDScaleMin.valueChanged.connect(
-                self._on_cake_scale_spin_changed)
+                self._on_ccd_scale_spin_changed)
         if hasattr(self.widget, "doubleSpinBox_CCDScaleMax"):
             self.widget.doubleSpinBox_CCDScaleMax.valueChanged.connect(
-                self._on_cake_scale_spin_changed)
-        if hasattr(self.widget, "cake_hist_widget"):
-            self.widget.cake_hist_widget.boundChanged.connect(
-                self._set_cake_bound_from_hist)
+                self._on_ccd_scale_spin_changed)
+        if hasattr(self.widget, "ccd_hist_widget"):
+            self.widget.ccd_hist_widget.boundChanged.connect(
+                self._set_ccd_bound_from_hist)
         """
-        self.widget.pushButton_Load_CakeFormatFile.clicked.connect(
-            self.load_cake_format_file)
-        self.widget.pushButton_Save_CakeFormatFile.clicked.connect(
-            self.save_cake_format_file)
+        self.widget.pushButton_Load_CCDFormatFile.clicked.connect(
+            self.load_ccd_format_file)
+        self.widget.pushButton_Save_CCDFormatFile.clicked.connect(
+            self.save_ccd_format_file)
         """
 
-    def update_cake(self):
+    def update_ccd(self):
         if not self.model.base_ptn_exist():
             QtWidgets.QMessageBox.warning(
                 self.widget, 'Warning', 'Choose a spectrum file first.')
@@ -80,11 +80,11 @@ class CCDController(object):
                 'Move the image file into the same folder as the spectrum first.')
             return
 
-        success = self.produce_cake()
+        success = self.produce_ccd()
         if not success:
             return
         temp_dir = get_temp_dir(self.model.get_base_ptn_filename())
-        self.model.diff_img.write_temp_cakefiles(temp_dir=temp_dir)
+        self.model.diff_img.write_temp_ccdfiles(temp_dir=temp_dir)
         self._set_image_file_box()
         self._apply_changes_to_graph()
 
@@ -180,14 +180,8 @@ class CCDController(object):
         x_raw, __ = self.model.base_ptn.get_raw()
         if x_raw is None or len(x_raw) == 0:
             return
-        roi_min = float(self.widget.doubleSpinBox_Background_ROI_min.value())
-        roi_max = float(self.widget.doubleSpinBox_Background_ROI_max.value())
-        if (x_raw.min() >= roi_min) or (x_raw.max() <= roi_min):
-            roi_min = float(x_raw.min())
-            self.widget.doubleSpinBox_Background_ROI_min.setValue(roi_min)
-        if (x_raw.max() <= roi_max) or (x_raw.min() >= roi_max):
-            roi_max = float(x_raw.max())
-            self.widget.doubleSpinBox_Background_ROI_max.setValue(roi_max)
+        roi_min = float(x_raw.min())
+        roi_max = float(x_raw.max())
         params = [
             int(self.widget.spinBox_BGParam1.value()),
         ]
@@ -229,7 +223,7 @@ class CCDController(object):
         if not self.model.diff_img_exist():
             self.widget.pushButton_CCDSelectRoi.setChecked(False)
             return
-        if not hasattr(self.widget.mpl.canvas, "ax_cake"):
+        if not hasattr(self.widget.mpl.canvas, "ax_ccd"):
             self.widget.pushButton_CCDSelectRoi.setChecked(False)
             return
         self._deactivate_row_roi_selector()
@@ -306,7 +300,7 @@ class CCDController(object):
             self.widget.pushButton_CCDSelectRoi.blockSignals(False)
 
     def _on_row_roi_press(self, event):
-        ax = getattr(self.widget.mpl.canvas, "ax_cake", None)
+        ax = getattr(self.widget.mpl.canvas, "ax_ccd", None)
         if event.inaxes != ax:
             return
         if event.button != 1 or event.ydata is None:
@@ -317,8 +311,8 @@ class CCDController(object):
     def _on_row_roi_motion(self, event):
         if self._row_roi_press_y is None:
             return
-        ax = getattr(self.widget.mpl.canvas, "ax_cake", None)
-        y_now = self._event_y_to_cake_row(event, ax)
+        ax = getattr(self.widget.mpl.canvas, "ax_ccd", None)
+        y_now = self._event_y_to_ccd_row(event, ax)
         if y_now is None:
             return
         self._set_row_roi_spin_values_from_pixels(self._row_roi_press_y, y_now)
@@ -327,11 +321,11 @@ class CCDController(object):
     def _on_row_roi_release(self, event):
         if self._row_roi_press_y is None:
             return
-        ax = getattr(self.widget.mpl.canvas, "ax_cake", None)
+        ax = getattr(self.widget.mpl.canvas, "ax_ccd", None)
         if event.button != 1:
             self._deactivate_row_roi_selector()
             return
-        y_release = self._event_y_to_cake_row(event, ax)
+        y_release = self._event_y_to_ccd_row(event, ax)
         if y_release is None:
             self._deactivate_row_roi_selector()
             return
@@ -343,7 +337,7 @@ class CCDController(object):
         self._apply_row_roi_to_spectrum()
         self._deactivate_row_roi_selector()
 
-    def _event_y_to_cake_row(self, event, ax):
+    def _event_y_to_ccd_row(self, event, ax):
         if ax is None:
             return None
         if event.ydata is not None and event.inaxes == ax:
@@ -357,7 +351,7 @@ class CCDController(object):
             return None
 
     def _update_row_roi_preview(self, y_current):
-        ax = getattr(self.widget.mpl.canvas, "ax_cake", None)
+        ax = getattr(self.widget.mpl.canvas, "ax_ccd", None)
         if ax is None:
             return
         try:
@@ -418,12 +412,12 @@ class CCDController(object):
         self._apply_row_roi_to_spectrum()
 
     """
-    def load_cake_format_file(self):
+    def load_ccd_format_file(self):
         # get filename
         temp_dir = get_temp_dir(self.model.get_base_ptn_filename())
         filen = QtWidgets.QFileDialog.getOpenFileName(
-            self.widget, "Open a cake format File", temp_dir,  # self.model.chi_path,
-            "Data files (*.cakeformat)")[0]
+            self.widget, "Open a ccd format File", temp_dir,  # self.model.chi_path,
+            "Data files (*.ccdformat)")[0]
         if filen == '':
             return
         temp_values = []
@@ -431,26 +425,26 @@ class CCDController(object):
             for line in f:
                 temp_values.append(float(line.split(':')[1]))
         self.widget.spinBox_AziShift.setValue(temp_values[0])
-        self.widget.spinBox_MaxCakeScale.setValue(temp_values[1])
+        self.widget.spinBox_MaxCCDScale.setValue(temp_values[1])
         self.widget.horizontalSlider_VMin.setValue(temp_values[2])
         self.widget.horizontalSlider_VMax.setValue(temp_values[3])
         self.widget.horizontalSlider_MaxScaleBars.setValue(temp_values[4])
         self._apply_changes_to_graph()
 
-    def save_cake_format_file(self):
+    def save_ccd_format_file(self):
         # make filename
         temp_dir = get_temp_dir(self.model.get_base_ptn_filename())
-        ext = "cakeformat"
+        ext = "ccdformat"
         #filen_t = self.model.make_filename(ext)
         filen_t = make_filename(self.model.base_ptn.fname, ext,
                                 temp_dir=temp_dir)
         filen = dialog_savefile(self.widget, filen_t)
         if str(filen) == '':
             return
-        # save cake related Values
+        # save ccd related Values
         names = ['azi_shift', 'int_max', 'min_bar', 'max_bar', 'scale_bar']
         values = [self.widget.spinBox_AziShift.value(),
-                  self.widget.spinBox_MaxCakeScale.value(),
+                  self.widget.spinBox_MaxCCDScale.value(),
                   self.widget.horizontalSlider_VMin.value(),
                   self.widget.horizontalSlider_VMax.value(),
                   self.widget.horizontalSlider_MaxScaleBars.value()]
@@ -460,31 +454,42 @@ class CCDController(object):
                 f.write(n + ' : ' + str(v) + '\n')
     """
 
-    def reset_max_cake_scale(self):
-        if hasattr(self.widget, "checkBox_Diff") and self.widget.checkBox_Diff.isChecked():
-            return
+    def reset_max_ccd_scale(self):
         self._ensure_row_roi_defined_for_full_ccd()
         self._set_row_roi_spin_limits()
-        intensity_cake, _, _ = self.model.diff_img.get_cake()
-        arr = np.asarray(intensity_cake, dtype=float)
+        arr = np.asarray([], dtype=float)
+        ax_ccd = getattr(getattr(self.widget, "mpl", None), "canvas", None)
+        ax_ccd = getattr(ax_ccd, "ax_ccd", None)
+        if ax_ccd is not None and getattr(ax_ccd, "images", None):
+            try:
+                image_arr = ax_ccd.images[-1].get_array()
+                if np.ma.isMaskedArray(image_arr):
+                    arr = np.asarray(image_arr.compressed(), dtype=float)
+                else:
+                    arr = np.asarray(image_arr, dtype=float).ravel()
+            except Exception:
+                arr = np.asarray([], dtype=float)
+        if arr.size == 0:
+            intensity_ccd, _, _ = self.model.diff_img.get_ccd()
+            arr = np.asarray(intensity_ccd, dtype=float).ravel()
         arr = arr[np.isfinite(arr)]
         if arr.size == 0:
             return
         vmin = float(np.min(arr))
         vmax = float(np.max(arr))
-        self._set_cake_scale_spinboxes(vmin, vmax)
+        self._set_ccd_scale_spinboxes(vmin, vmax)
         self._apply_changes_to_graph()
 
     def _apply_changes_to_graph(self):
         self.plot_ctrl.update()
 
-    def _set_cake_bound_from_hist(self, bound_type, intensity_value):
+    def _set_ccd_bound_from_hist(self, bound_type, intensity_value):
         if bound_type == "min":
             self.widget.doubleSpinBox_CCDScaleMin.setValue(float(intensity_value))
         elif bound_type == "max":
             self.widget.doubleSpinBox_CCDScaleMax.setValue(float(intensity_value))
 
-    def _set_cake_scale_spinboxes(self, vmin, vmax):
+    def _set_ccd_scale_spinboxes(self, vmin, vmax):
         if not hasattr(self.widget, "doubleSpinBox_CCDScaleMin"):
             return
         if vmax < vmin:
@@ -496,7 +501,7 @@ class CCDController(object):
         self.widget.doubleSpinBox_CCDScaleMin.blockSignals(False)
         self.widget.doubleSpinBox_CCDScaleMax.blockSignals(False)
 
-    def _on_cake_scale_spin_changed(self, value):
+    def _on_ccd_scale_spin_changed(self, value):
         del value
         if not hasattr(self.widget, "doubleSpinBox_CCDScaleMin"):
             return
@@ -523,18 +528,18 @@ class CCDController(object):
         else:
             self._set_image_file_box_missing()
 
-    def _warn_cannot_process_cake(self):
+    def _warn_cannot_process_ccd(self):
         QtWidgets.QMessageBox.warning(
             self.widget, 'Warning',
             'Rampo cannot process the CCD view: no image data and no cached CCD files were found.')
 
-    def _load_cake_from_temp_without_raw_image(self, temp_dir):
-        # Temp cake files are named from the base pattern root name.
+    def _load_ccd_from_temp_without_raw_image(self, temp_dir):
+        # Temp ccd files are named from the base pattern root name.
         if self.model.diff_img is None:
             self.model.reset_diff_img()
         self.model.diff_img.img_filename = self.model.make_filename(
             'tif', original=True)
-        return self.model.diff_img.read_cake_from_tempfile(temp_dir=temp_dir)
+        return self.model.diff_img.read_ccd_from_tempfile(temp_dir=temp_dir)
 
     def show_tif_header(self):
         if not self.model.base_ptn_exist():
@@ -565,16 +570,16 @@ class CCDController(object):
             #self.widget.plainTextEdit_ViewJCPDS.setPlainText(textoutput)
 
 
-    def addremove_cake(self):
+    def addremove_ccd(self):
         """
-        add / remove cake to the graph
+        add / remove ccd to the graph
         """
-        update = self._addremove_cake()
+        update = self._addremove_ccd()
         if update:
             self._apply_changes_to_graph()
     """
     def image_file_exists(self):
-        # if no image file, no cake
+        # if no image file, no ccd
         filen_tif = self.model.make_filename('tif', original=True)
         filen_tiff = self.model.make_filename('tiff', original=True)
         filen_mar3450 = self.model.make_filename('mar3450',
@@ -591,18 +596,18 @@ class CCDController(object):
             return True
     """
 
-    def _addremove_cake(self):
+    def _addremove_ccd(self):
         """
-        add / remove cake
+        add / remove ccd
         no signal to update_graph
         """
-        # if no base ptn, no cake
+        # if no base ptn, no ccd
         if not self.model.base_ptn_exist():
             QtWidgets.QMessageBox.warning(
                 self.widget, 'Warning', 'Choose a spectrum file first.')
             return False
         if self._is_spe_source():
-            if not self.process_temp_cake():
+            if not self.process_temp_ccd():
                 return False
             return True
         if not self.model.associated_image_exists():
@@ -612,19 +617,19 @@ class CCDController(object):
                     self.widget, 'Warning',
                     'Cannot find CCD image file.')
                 return False
-            if not self.process_temp_cake():
-                self._warn_cannot_process_cake()
+            if not self.process_temp_ccd():
+                self._warn_cannot_process_ccd()
                 return False
             return True
 
-        if not self.process_temp_cake():
-            self._warn_cannot_process_cake()
+        if not self.process_temp_ccd():
+            self._warn_cannot_process_ccd()
             return False
         return True
 
     def _load_new_image(self):
         """
-        Load new image for cake view.  Cake should be the same as base pattern.
+        Load new image for ccd view.  CCD should be the same as base pattern.
         no signal to update_graph
         """
         self.model.reset_diff_img()
@@ -641,7 +646,7 @@ class CCDController(object):
         return extract_extension(str(self.model.get_base_ptn_filename())).lower() == 'spe'
 
     def apply_mask(self):
-        # self.produce_cake()
+        # self.produce_ccd()
         min_mask = float(self.widget.spinBox_MaskMin.value())
         max_mask = float(self.widget.spinBox_MaskMax.value())
         zrange = self.model.diff_img.get_img_zrange()
@@ -656,8 +661,8 @@ class CCDController(object):
         self._apply_changes_to_graph()
 
     def reset_maskrange(self):
-        # get min and max of the cake image
-        #intensity_cake, _, _ = self.model.diff_img.get_cake()
+        # get min and max of the ccd image
+        #intensity_ccd, _, _ = self.model.diff_img.get_ccd()
         zrange = self.model.diff_img.get_img_zrange()
         if zrange != None:
             # push those values to spinboxes
@@ -668,9 +673,9 @@ class CCDController(object):
         # reprocess the image
         # self.apply_mask()
 
-    def produce_cake(self):
+    def produce_ccd(self):
         """
-        Reprocess to get cake.  Slower re - processing
+        Reprocess to get ccd.  Slower re - processing
         does not signal to update_graph
         """
         success = self._load_new_image()
@@ -682,9 +687,9 @@ class CCDController(object):
         self._set_image_file_box()
         return True
 
-    def process_temp_cake(self):
+    def process_temp_ccd(self):
         """
-        load cake through either temporary file or make a new cake
+        load ccd through either temporary file or make a new ccd
         """
         temp_dir = get_temp_dir(self.model.get_base_ptn_filename())
         if self._is_spe_source():
@@ -693,7 +698,7 @@ class CCDController(object):
                 return False
             self._set_row_roi_spin_limits()
             self._apply_row_roi_to_spectrum()
-            self.model.diff_img.write_temp_cakefiles(temp_dir=temp_dir)
+            self.model.diff_img.write_temp_ccdfiles(temp_dir=temp_dir)
             return True
         has_raw_image = self.model.associated_image_exists()
         if not has_raw_image:
@@ -703,37 +708,37 @@ class CCDController(object):
                     self.widget, "Warning",
                     "Image file for the base pattern does not exist.")
                 return False
-            return self._load_cake_from_temp_without_raw_image(temp_dir)
+            return self._load_ccd_from_temp_without_raw_image(temp_dir)
         #temp_dir = os.path.join(self.model.chi_path, 'temporary_pkpo')
         success = self._load_new_image()
         if not success:
             return False
-        success = self.model.diff_img.read_cake_from_tempfile(
+        success = self.model.diff_img.read_ccd_from_tempfile(
             temp_dir=temp_dir)
         if success:
             print(str(datetime.datetime.now())[:-7],
-                ": Load cake image from temporary file.")
+                ": Load ccd image from temporary file.")
             return True
         print(str(datetime.datetime.now())[:-7],
-            ": Create new temporary file for cake image.")
-        self._update_temp_cake_files(temp_dir)
+            ": Create new temporary file for ccd image.")
+        self._update_temp_ccd_files(temp_dir)
         return True
 
-    def _update_temp_cake_files(self, temp_dir):
-        success = self.produce_cake()
+    def _update_temp_ccd_files(self, temp_dir):
+        success = self.produce_ccd()
         if not success:
             return
-        self.model.diff_img.write_temp_cakefiles(temp_dir=temp_dir)
+        self.model.diff_img.write_temp_ccdfiles(temp_dir=temp_dir)
 
-    def temp_cake_exists(self):
+    def temp_ccd_exists(self):
         temp_dir = get_temp_dir(self.model.get_base_ptn_filename())
-        search_pattern = os.path.join(temp_dir, "*.cake.npy")
-        cake_all = glob.glob(search_pattern)
-        print(len(cake_all))
-        if len(cake_all) < 3:
+        search_pattern = os.path.join(temp_dir, "*.ccd.npy")
+        ccd_all = glob.glob(search_pattern)
+        print(len(ccd_all))
+        if len(ccd_all) < 3:
             return False
         else:
             return True
 
 
-CakeController = CCDController
+CCDController = CCDController

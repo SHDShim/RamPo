@@ -70,8 +70,10 @@ class PeakPoModel(object):
     def set_current_section(self, roi):
         x_section_bg, y_section_bg = get_data_section(
             self.base_ptn.x_bg, self.base_ptn.y_bg, roi)
+        x_bgsub = getattr(self.base_ptn, "x_bgsub_processed", self.base_ptn.x_bgsub)
+        y_bgsub = getattr(self.base_ptn, "y_bgsub_processed", self.base_ptn.y_bgsub)
         __, y_section_bgsub = get_data_section(
-            self.base_ptn.x_bgsub, self.base_ptn.y_bgsub, roi)
+            x_bgsub, y_bgsub, roi)
         self.current_section.set(x_section_bg, y_section_bgsub, y_section_bg)
 
     def current_section_exists_in_list(self):
@@ -166,8 +168,10 @@ class PeakPoModel(object):
     def get_single_section(self, roi):
         x_section_bg, y_section_bg = get_data_section(
             self.base_ptn.x_bg, self.base_ptn.y_bg, roi)
+        x_bgsub = getattr(self.base_ptn, "x_bgsub_processed", self.base_ptn.x_bgsub)
+        y_bgsub = getattr(self.base_ptn, "y_bgsub_processed", self.base_ptn.y_bgsub)
         __, y_section_bgsub = get_data_section(
-            self.base_ptn.x_bgsub, self.base_ptn.y_bgsub, roi)
+            x_bgsub, y_bgsub, roi)
         return x_section_bg, y_section_bgsub, y_section_bg
 
     def reset_base_ptn(self):
@@ -244,14 +248,14 @@ class PeakPoModel(object):
     def same_filename_as_base_ptn(self, filename):
         return samefilename(self.base_ptn.fname, filename)
 
-    def set_base_ptn(self, new_base_ptn_filen, wavelength):
+    def set_base_ptn(self, new_base_ptn_filen, wavelength, use_wavenumber=True):
         """
         :param new_base_ptn: PatternPeakPo object
         """
         self.reset_base_ptn()
         self.base_ptn.read_file(new_base_ptn_filen)
         self.set_chi_path(os.path.split(new_base_ptn_filen)[0])
-        self.set_base_ptn_wavelength(wavelength)
+        self.set_base_ptn_wavelength(wavelength, use_wavenumber=use_wavenumber)
         self.base_ptn.display = True
 
     def get_base_ptn(self):
@@ -338,12 +342,19 @@ class PeakPoModel(object):
     def get_base_ptn_wavelength(self):
         return self.base_ptn.wavelength
 
-    def set_base_ptn_wavelength(self, wavelength):
+    def set_base_ptn_wavelength(self, wavelength, use_wavenumber=True):
         self.base_ptn.wavelength = wavelength
         if hasattr(self.base_ptn, "apply_excitation_wavelength"):
-            self.base_ptn.apply_excitation_wavelength(wavelength)
+            self.base_ptn.apply_excitation_wavelength(
+                wavelength, use_wavenumber=use_wavenumber)
+        for pattern in self.waterfall_ptn:
+            pattern.wavelength = wavelength
+            if hasattr(pattern, "apply_excitation_wavelength"):
+                pattern.apply_excitation_wavelength(
+                    wavelength, use_wavenumber=use_wavenumber)
         if self.diff_img is not None and hasattr(self.diff_img, "apply_excitation_wavelength"):
-            self.diff_img.apply_excitation_wavelength(wavelength)
+            self.diff_img.apply_excitation_wavelength(
+                wavelength, use_wavenumber=use_wavenumber)
 
     def get_base_ptn_filename(self):
         return self.base_ptn.fname

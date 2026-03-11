@@ -220,10 +220,6 @@ class WaterfallController(object):
 
     def _build_processed_waterfall_pattern(self, filename, display=False, color='white'):
         wavelength = float(self.widget.doubleSpinBox_SetWavelength.value())
-        bg_roi = [
-            float(self.widget.doubleSpinBox_Background_ROI_min.value()),
-            float(self.widget.doubleSpinBox_Background_ROI_max.value()),
-        ]
         bg_params = [int(self.widget.spinBox_BGParam1.value())]
         fit_areas = self._current_background_fit_areas()
 
@@ -237,6 +233,7 @@ class WaterfallController(object):
 
         x_raw, y_raw = spectrum.get_raw()
         x_raw = spectrum.x_raw
+        bg_roi = [float(np.nanmin(x_raw)), float(np.nanmax(x_raw))]
         y_fit = y_raw
         if self.plot_ctrl is not None and bool(self.plot_ctrl._smoothing_active()):
             __, y_fit = self.plot_ctrl._get_smoothed_pattern_xy(x_raw, y_raw)

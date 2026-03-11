@@ -49,17 +49,17 @@ def load_bgsub_or_raw_xy(spectrum_path, use_bgsub, spectrum_cache):
     return load_spectrum_xy(spectrum_path, spectrum_cache)
 
 
-def find_temp_cake_triplet(chi_path):
+def find_temp_ccd_triplet(chi_path):
     temp_dir = get_temp_dir(chi_path)
-    tth_files = sorted(glob.glob(os.path.join(temp_dir, "*.tth.cake.npy")))
+    tth_files = sorted(glob.glob(os.path.join(temp_dir, "*.tth.ccd.npy")))
     if not tth_files:
         return None
 
     stem_map = {}
     for tth_f in tth_files:
-        stem = tth_f[: -len(".tth.cake.npy")]
-        azi_f = stem + ".azi.cake.npy"
-        int_f = stem + ".int.cake.npy"
+        stem = tth_f[: -len(".tth.ccd.npy")]
+        azi_f = stem + ".azi.ccd.npy"
+        int_f = stem + ".int.ccd.npy"
         if os.path.exists(azi_f) and os.path.exists(int_f):
             stem_map[stem] = (tth_f, azi_f, int_f)
     if not stem_map:
@@ -70,11 +70,11 @@ def find_temp_cake_triplet(chi_path):
     return triplets[0]
 
 
-def load_cake_data(chi_path, cake_cache):
-    if chi_path in cake_cache:
-        return cake_cache[chi_path]
+def load_ccd_data(chi_path, ccd_cache):
+    if chi_path in ccd_cache:
+        return ccd_cache[chi_path]
 
-    triplet = find_temp_cake_triplet(chi_path)
+    triplet = find_temp_ccd_triplet(chi_path)
     if triplet is None:
         return None
 
@@ -86,7 +86,7 @@ def load_cake_data(chi_path, cake_cache):
         np.asarray(azi, dtype=float),
         np.asarray(intensity, dtype=float),
     )
-    cake_cache[chi_path] = payload
+    ccd_cache[chi_path] = payload
     return payload
 
 

@@ -4,7 +4,7 @@ from matplotlib.figure import Figure
 from matplotlib.backends.backend_qtagg import FigureCanvasQTAgg as FigureCanvas
 
 
-class CakeHistogramWidget(QtWidgets.QWidget):
+class CCDHistogramWidget(QtWidgets.QWidget):
     boundChanged = QtCore.Signal(str, float)
 
     def __init__(self, parent=None):
@@ -34,11 +34,13 @@ class CakeHistogramWidget(QtWidgets.QWidget):
         self.button_apply_pct = QtWidgets.QPushButton("Apply pct")
 
         self.fig = Figure(figsize=(4, 1.05), tight_layout=True)
+        self.fig.patch.set_facecolor("black")
+        self.fig.patch.set_edgecolor("black")
+        self.fig.patch.set_linewidth(0.0)
         self.canvas = FigureCanvas(self.fig)
+        self.canvas.setStyleSheet("background-color: black; border: 0px;")
         self.ax = self.fig.add_subplot(111)
-        self.ax.set_yticks([])
-        self.ax.set_xlabel("Intensity histogram (Drag blue/orange lines for min/max)")
-        self.ax.tick_params(axis="x", labelsize=8)
+        self._style_axes()
 
         self.label_low = QtWidgets.QLabel("Low %")
         self.label_high = QtWidgets.QLabel("High %")
@@ -80,8 +82,7 @@ class CakeHistogramWidget(QtWidgets.QWidget):
         arr = arr[np.isfinite(arr)]
         if arr.size == 0:
             self.ax.clear()
-            self.ax.set_yticks([])
-            self.ax.set_xlabel("Intensity histogram (no data)")
+            self._style_axes(xlabel="Intensity histogram (no data)")
             self.canvas.draw_idle()
             return
 
@@ -92,20 +93,32 @@ class CakeHistogramWidget(QtWidgets.QWidget):
         lo, hi_data = float(arr.min()), float(arr.max())
         if hi_data <= lo:
             hi_data = lo + 1.0
-        self._xlims = (lo, hi_data)
+        display_lo = lo
+        display_hi = hi_data
+        if vmin is not None:
+            display_lo = min(display_lo, float(vmin))
+            display_hi = max(display_hi, float(vmin))
+        if vmax is not None:
+            display_lo = min(display_lo, float(vmax))
+            display_hi = max(display_hi, float(vmax))
+        span = display_hi - display_lo
+        if span <= 0:
+            span = max(abs(display_hi), 1.0)
+        pad = span * 0.10
+        self._xlims = (display_lo - pad, display_hi + pad)
 
         self.ax.clear()
-        hist_lo, hist_hi = self._xlims
+        hist_lo, hist_hi = lo, hi_data
         if hist_hi <= hist_lo:
-            hist_lo, hist_hi = lo, hi_data
+            hist_lo = lo
+            hist_hi = hi_data
         self.ax.hist(arr, bins=128, range=(hist_lo, hist_hi), color="#5c5c5c", alpha=0.9)
         self.ax.set_xlim(*self._xlims)
         if self.check_log.isChecked():
             self.ax.set_yscale("log")
         else:
             self.ax.set_yscale("linear")
-        self.ax.set_yticks([])
-        self.ax.set_xlabel("Intensity histogram (Drag blue/orange lines for min/max)")
+        self._style_axes()
 
         if vmin is not None:
             self._line_min = self.ax.axvline(vmin, color="#5ec7ff", linewidth=1.6)
@@ -190,3 +203,13 @@ class CakeHistogramWidget(QtWidgets.QWidget):
         elif self._drag_target == "max":
             self.boundChanged.emit("max", x)
         self._drag_target = None
+
+    def _style_axes(self, xlabel="Intensity histogram (Drag blue/orange lines for min/max)"):
+        self.ax.set_facecolor("black")
+        self.ax.set_yticks([])
+        self.ax.set_xlabel(xlabel)
+        self.ax.tick_params(axis="x", labelsize=8)
+        self.ax.spines["bottom"].set_visible(False)
+        self.ax.spines["left"].set_color("white")
+        self.ax.spines["right"].set_color("white")
+        self.ax.spines["top"].set_color("white")

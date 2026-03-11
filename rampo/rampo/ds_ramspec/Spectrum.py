@@ -24,6 +24,8 @@ class Spectrum(object):
             self.read_file(filename)
         self.x_bgsub = None
         self.y_bgsub = None
+        self.x_bgsub_processed = None
+        self.y_bgsub_processed = None
         self.x_bg = None
         self.y_bg = None
         self.params_chbg = [3]
@@ -65,15 +67,18 @@ class Spectrum(object):
         self.x_raw = twotheta
         self.y_raw = intensity
 
-    def apply_excitation_wavelength(self, laser_wavelength_nm):
+    def apply_excitation_wavelength(self, laser_wavelength_nm, use_wavenumber=True):
         if self.x_wavelength_raw is None:
             return False
-        laser = float(laser_wavelength_nm)
         x_nm = np.asarray(self.x_wavelength_raw, dtype=float)
-        x_shift = np.full_like(x_nm, np.nan, dtype=float)
-        valid = np.isfinite(x_nm) & (x_nm > 0.0) & np.isfinite(laser) & (laser > 0.0)
-        x_shift[valid] = 1.0e7 / laser - 1.0e7 / x_nm[valid]
-        self.x_raw = x_shift
+        if use_wavenumber:
+            laser = float(laser_wavelength_nm)
+            x_disp = np.full_like(x_nm, np.nan, dtype=float)
+            valid = np.isfinite(x_nm) & (x_nm > 0.0) & np.isfinite(laser) & (laser > 0.0)
+            x_disp[valid] = 1.0e7 / laser - 1.0e7 / x_nm[valid]
+        else:
+            x_disp = np.asarray(x_nm, dtype=float)
+        self.x_raw = x_disp
         if hasattr(self, "roi") and (self.roi is not None):
             x_roi, __ = self._get_section(self.x_raw, self.y_raw, self.roi)
             self.x_bg = x_roi
@@ -123,16 +128,22 @@ class Spectrum(object):
         if params is not None:
             self.params_chbg = [int(params[0])]
         x = np.asarray(self.x_raw, dtype=float)
+        y_raw = np.asarray(self.y_raw, dtype=float)
+        n = min(x.size, y_raw.size)
+        x = x[:n]
+        y_raw = y_raw[:n]
         if y_source is None:
-            y = np.asarray(self.y_raw, dtype=float)
+            y_fit_source = np.asarray(y_raw, dtype=float)
         else:
-            y = np.asarray(y_source, dtype=float)
-            if y.shape != x.shape:
-                n = min(x.size, y.size)
+            y_fit_source = np.asarray(y_source, dtype=float)
+            if y_fit_source.shape != x.shape:
+                n = min(x.size, y_fit_source.size)
                 x = x[:n]
-                y = y[:n]
+                y_raw = y_raw[:n]
+                y_fit_source = y_fit_source[:n]
         t_start = time.time()
         fit_area_list = []
+        explicit_fit_areas = fit_areas is not None
         if fit_areas:
             for area in fit_areas:
                 try:
@@ -144,17 +155,27 @@ class Spectrum(object):
                     xmin, xmax = xmax, xmin
                 fit_area_list.append([xmin, xmax])
         self.bg_fit_areas = fit_area_list
-        y_bg = fit_bg_poly(x, y, self.params_chbg[0], fit_areas=fit_area_list)
-        print(str(datetime.datetime.now())[:-7], 
-            ": Bgsub takes {0:.2f}s".format(time.time() - t_start))
         self.x_bg = x
         self.x_bgsub = x
-        y_bgsub = y - y_bg
-        if np.size(y_bgsub) > 0:
-            y_min = float(np.nanmin(y_bgsub))
-            if np.isfinite(y_min) and (y_min < 0.0):
-                y_bgsub = y_bgsub - y_min
+        self.x_bgsub_processed = x
+        if explicit_fit_areas and not fit_area_list:
+            y_bg = np.zeros_like(y_raw, dtype=float)
+            y_bgsub_processed = np.asarray(y_fit_source, dtype=float)
+            y_bgsub = np.asarray(y_raw, dtype=float)
+        else:
+            y_bg = fit_bg_poly(
+                x, y_fit_source, self.params_chbg[0], fit_areas=fit_area_list)
+            y_bgsub_processed = y_fit_source - y_bg
+            y_bgsub = y_raw - y_bg
+            if np.size(y_bgsub_processed) > 0:
+                y_min = float(np.nanmin(y_bgsub_processed))
+                if np.isfinite(y_min) and (y_min < 0.0):
+                    y_bgsub_processed = y_bgsub_processed - y_min
+                    y_bgsub = y_bgsub - y_min
+        print(str(datetime.datetime.now())[:-7], 
+            ": Bgsub takes {0:.2f}s".format(time.time() - t_start))
         self.y_bgsub = y_bgsub
+        self.y_bgsub_processed = y_bgsub_processed
         self.y_bg = y_bg
         self.roi = [float(np.nanmin(x)), float(np.nanmax(x))] if x.size > 0 else roi
 
@@ -173,6 +194,11 @@ class Spectrum(object):
     def get_bgsub(self):
         return self.x_bgsub, self.y_bgsub
 
+    def get_bgsub_processed(self):
+        if self.x_bgsub_processed is None or self.y_bgsub_processed is None:
+            return self.get_bgsub()
+        return self.x_bgsub_processed, self.y_bgsub_processed
+
     def get_bg(self):
         return self.x_bg, self.y_bg
 
@@ -181,6 +207,8 @@ class Spectrum(object):
         self.y_bg = y_bg
         self.x_bgsub = x_bgsub
         self.y_bgsub = y_bgsub
+        self.x_bgsub_processed = x_bgsub
+        self.y_bgsub_processed = y_bgsub
         self.roi = roi
         self.params_chbg = bg_params
         self.bg_fit_areas = list(fit_areas or [])

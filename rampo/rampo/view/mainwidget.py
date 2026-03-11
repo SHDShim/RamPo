@@ -1,7 +1,7 @@
 import os
 from qtpy import QtCore, QtWidgets
 from .qtd import Ui_MainWindow
-from .cakehistwidget import CakeHistogramWidget
+from .ccdhistwidget import CCDHistogramWidget
 from ..utils import SpinBoxFixStyle
 from ..version import __version__
 from ..citation import __citation__
@@ -48,23 +48,19 @@ class MainWindow(QtWidgets.QMainWindow, Ui_MainWindow):
         self.doubleSpinBox_Temperature.setStyle(SpinBoxFixStyle())
         self.spinBox_BGParam1.setKeyboardTracking(False)
         self.spinBox_BGParam1.setStyle(SpinBoxFixStyle())
-        self.doubleSpinBox_Background_ROI_max.setKeyboardTracking(False)
-        self.doubleSpinBox_Background_ROI_min.setKeyboardTracking(False)
-        self.doubleSpinBox_Background_ROI_max.setStyle(SpinBoxFixStyle())
-        self.doubleSpinBox_Background_ROI_min.setStyle(SpinBoxFixStyle())
         self.doubleSpinBox_SetWavelength.setKeyboardTracking(False)
         self.doubleSpinBox_SetWavelength.setStyle(SpinBoxFixStyle())
         linethicknesses = ['0', '0.1', '0.2', '0.5', '0.75',
                            '1', '1.5', '2', '3', '4', '5']
         self.comboBox_BasePtnLineThickness.addItems(linethicknesses)
         self.comboBox_PtnJCPDSBarThickness.addItems(linethicknesses)
-        self.comboBox_CakeJCPDSBarThickness.addItems(linethicknesses)
+        self.comboBox_CCDJCPDSBarThickness.addItems(linethicknesses)
         self.comboBox_BkgnLineThickness.addItems(linethicknesses)
         self.comboBox_WaterfallLineThickness.addItems(linethicknesses)
         self.comboBox_VertCursorThickness.addItems(linethicknesses)
         self.comboBox_BasePtnLineThickness.setCurrentText('1')
         self.comboBox_PtnJCPDSBarThickness.setCurrentText('1')
-        self.comboBox_CakeJCPDSBarThickness.setCurrentText('0.5')
+        self.comboBox_CCDJCPDSBarThickness.setCurrentText('0.5')
         self.comboBox_BkgnLineThickness.setCurrentText('2')
         self.comboBox_WaterfallLineThickness.setCurrentText('0.5')
         self.comboBox_VertCursorThickness.setCurrentText('1')
@@ -131,7 +127,7 @@ class MainWindow(QtWidgets.QMainWindow, Ui_MainWindow):
         self._setup_title_config_group()
         self._setup_plot_setup_group()
         self._setup_bg_default_button()
-        self._setup_cake_colormap_control()
+        self._setup_ccd_colormap_control()
         self._setup_spectrum_smoothing_control()
         self._setup_ccd_roi_group()
         self._reorder_spectrum_process_groups()
@@ -159,9 +155,9 @@ class MainWindow(QtWidgets.QMainWindow, Ui_MainWindow):
         if hasattr(self, "checkBox_ShowBg"):
             self.checkBox_ShowBg.setText("Bg show")
             self.checkBox_ShowBg.setToolTip("Show fitted background")
-        if hasattr(self, "checkBox_ShowCake"):
-            self.checkBox_ShowCake.setChecked(True)
-            self.checkBox_ShowCake.setVisible(False)
+        if hasattr(self, "checkBox_ShowCCD"):
+            self.checkBox_ShowCCD.setChecked(True)
+            self.checkBox_ShowCCD.setVisible(False)
         if hasattr(self, "checkBox_LongCursor"):
             self.checkBox_LongCursor.setText("VCursor")
             self.checkBox_LongCursor.setToolTip("Change cursor to a vertical bar")
@@ -209,8 +205,8 @@ class MainWindow(QtWidgets.QMainWindow, Ui_MainWindow):
         ):
             if hasattr(self, name):
                 getattr(self, name).setVisible(False)
-        if hasattr(self, "pushButton_ApplyCakeView"):
-            self.pushButton_ApplyCakeView.setVisible(False)
+        if hasattr(self, "pushButton_ApplyCCDView"):
+            self.pushButton_ApplyCCDView.setVisible(False)
         if hasattr(self, "pushButton_ApplyWaterfallChange"):
             self.pushButton_ApplyWaterfallChange.setVisible(False)
         if hasattr(self, "checkBox_SetToBasePtnLambda"):
@@ -221,11 +217,11 @@ class MainWindow(QtWidgets.QMainWindow, Ui_MainWindow):
             "pushButton_AddAzi",
             "pushButton_RemoveAzi",
             "pushButton_ClearAziList",
-            "pushButton_LoadCakeMarkerFile",
-            "pushButton_SaveCakeMarkerFile",
-            "pushButton_InvertCakeBoxes",
+            "pushButton_LoadCCDMarkerFile",
+            "pushButton_SaveCCDMarkerFile",
+            "pushButton_InvertCCDBoxes",
             "pushButton_HighlightSelectedMarker",
-            "pushButton_IntegrateCake",
+            "pushButton_IntegrateCCD",
         ):
             if hasattr(self, name):
                 getattr(self, name).setVisible(False)
@@ -233,7 +229,7 @@ class MainWindow(QtWidgets.QMainWindow, Ui_MainWindow):
             idx = self.tabWidget_2.indexOf(self.tabWidget_2Page2)
             if idx >= 0:
                 self.tabWidget_2.removeTab(idx)
-        # Night,cake checkbox is replaced by explicit cake colormap selector
+        # Night,ccd checkbox is replaced by explicit ccd colormap selector
         # under Plot > Control.
         if hasattr(self, "checkBox_WhiteForPeak"):
             self.checkBox_WhiteForPeak.setVisible(False)
@@ -254,7 +250,7 @@ class MainWindow(QtWidgets.QMainWindow, Ui_MainWindow):
         self._setup_nav_carryover_config()
         self.tableWidget_DiffImgAzi.\
             setHorizontalHeaderLabels(['Notes', '2th', 'Azi', '2th', 'Azi'])
-        self._setup_cake_scale_layout()
+        self._setup_ccd_scale_layout()
         self.doubleSpinBox_Pressure.valueChanged.connect(
             self._update_pt_spinbox_colors)
         self.doubleSpinBox_Temperature.valueChanged.connect(
@@ -374,20 +370,20 @@ class MainWindow(QtWidgets.QMainWindow, Ui_MainWindow):
         self.checkBox_CarryNavJCPDS = QtWidgets.QCheckBox("RPO")
         self.checkBox_CarryNavPressure = QtWidgets.QCheckBox("Pressure")
         self.checkBox_CarryNavSpectrumSmoothing = QtWidgets.QCheckBox("Spectrum smoothing")
-        self.checkBox_CarryNavCakeZScale = QtWidgets.QCheckBox("CCD z scale")
+        self.checkBox_CarryNavCCDZScale = QtWidgets.QCheckBox("CCD z scale")
         self.checkBox_CarryNavCCDRoi = QtWidgets.QCheckBox("CCD ROI")
-        self.checkBox_CarryNavBackground = QtWidgets.QCheckBox("Background")
+        self.checkBox_CarryNavBackground = QtWidgets.QCheckBox("Background parameters")
         self.checkBox_CarryNavWaterfall = QtWidgets.QCheckBox("Waterfall list")
         self.checkBox_CarryNavFits = QtWidgets.QCheckBox("Fits information")
 
         # Default non-carry-over categories:
-        # backup, cake z scale, background, fits
+        # backup, ccd z scale, background, fits
         self.checkBox_CarryNavJCPDS.setChecked(True)
         self.checkBox_CarryNavPressure.setChecked(True)
         self.checkBox_CarryNavSpectrumSmoothing.setChecked(True)
-        self.checkBox_CarryNavCakeZScale.setChecked(False)
+        self.checkBox_CarryNavCCDZScale.setChecked(False)
         self.checkBox_CarryNavCCDRoi.setChecked(True)
-        self.checkBox_CarryNavBackground.setChecked(False)
+        self.checkBox_CarryNavBackground.setChecked(True)
         self.checkBox_CarryNavWaterfall.setChecked(True)
         self.checkBox_CarryNavFits.setChecked(False)
 
@@ -398,7 +394,7 @@ class MainWindow(QtWidgets.QMainWindow, Ui_MainWindow):
             self.checkBox_CarryNavCCDRoi,
         ]
         right_items = [
-            self.checkBox_CarryNavCakeZScale,
+            self.checkBox_CarryNavCCDZScale,
             self.checkBox_CarryNavBackground,
             self.checkBox_CarryNavWaterfall,
             self.checkBox_CarryNavFits,
@@ -631,6 +627,7 @@ class MainWindow(QtWidgets.QMainWindow, Ui_MainWindow):
     def _setup_bg_default_button(self):
         if not hasattr(self, "gridLayout_5"):
             return
+        bg_spin_width = 70
         self.label_4.setVisible(False)
         self.spinBox_BGParam0.setVisible(False)
         self.label_5.setVisible(False)
@@ -639,17 +636,24 @@ class MainWindow(QtWidgets.QMainWindow, Ui_MainWindow):
         self.spinBox_BGParam1.setMinimum(0)
         self.spinBox_BGParam1.setMaximum(99)
         self.spinBox_BGParam1.setValue(3)
+        self.spinBox_BGParam1.setMinimumWidth(bg_spin_width)
+        self.spinBox_BGParam1.setMaximumWidth(bg_spin_width)
         self.spinBox_BGParam1.setToolTip("Polynomial order for Raman background fit")
         if hasattr(self, "groupBox_4") and hasattr(self, "gridLayout_9"):
             self.groupBox_4.setTitle("Background")
-            self.label_2.setText("Minimum Raman shift")
-            self.label.setText("Maximum Raman shift")
+            self.label.setVisible(False)
+            self.label_2.setVisible(False)
+            self.doubleSpinBox_Background_ROI_min.setVisible(False)
+            self.doubleSpinBox_Background_ROI_max.setVisible(False)
+            self.gridLayout_9.setColumnStretch(0, 1)
+            self.gridLayout_9.setColumnStretch(1, 1)
+            self.gridLayout_9.setColumnStretch(2, 1)
             if self.label_6.parent() is not self.groupBox_4:
                 self.label_6.setParent(self.groupBox_4)
             if self.spinBox_BGParam1.parent() is not self.groupBox_4:
                 self.spinBox_BGParam1.setParent(self.groupBox_4)
-            self.gridLayout_9.addWidget(self.label_6, 3, 0, 1, 1)
-            self.gridLayout_9.addWidget(self.spinBox_BGParam1, 3, 2, 1, 1)
+            self.gridLayout_9.addWidget(self.label_6, 0, 0, 1, 1)
+            self.gridLayout_9.addWidget(self.spinBox_BGParam1, 0, 2, 1, 1)
             if hasattr(self, "tableWidget_BackgroundConstraints"):
                 self.tableWidget_BackgroundConstraints.setParent(self.groupBox_4)
                 self.tableWidget_BackgroundConstraints.setColumnCount(2)
@@ -665,8 +669,15 @@ class MainWindow(QtWidgets.QMainWindow, Ui_MainWindow):
                 header = self.tableWidget_BackgroundConstraints.horizontalHeader()
                 header.setStretchLastSection(False)
                 header.setSectionResizeMode(QtWidgets.QHeaderView.Stretch)
-                self.tableWidget_BackgroundConstraints.setMinimumHeight(120)
-                self.gridLayout_9.addWidget(self.tableWidget_BackgroundConstraints, 4, 0, 1, 3)
+                self.tableWidget_BackgroundConstraints.setMinimumHeight(140)
+                self.tableWidget_BackgroundConstraints.setMaximumHeight(140)
+                self.tableWidget_BackgroundConstraints.setVerticalScrollBarPolicy(
+                    QtCore.Qt.ScrollBarAsNeeded)
+                self.tableWidget_BackgroundConstraints.setHorizontalScrollBarPolicy(
+                    QtCore.Qt.ScrollBarAlwaysOff)
+                self.tableWidget_BackgroundConstraints.setSizePolicy(
+                    QtWidgets.QSizePolicy.Expanding, QtWidgets.QSizePolicy.Fixed)
+                self.gridLayout_9.addWidget(self.tableWidget_BackgroundConstraints, 1, 0, 1, 3)
                 self.pushButton_BGAreaAdd = QtWidgets.QPushButton("Add area", self.groupBox_4)
                 self.pushButton_BGAreaAdd.setCheckable(True)
                 self._set_action_button_style(
@@ -674,7 +685,7 @@ class MainWindow(QtWidgets.QMainWindow, Ui_MainWindow):
                     base_bg="#ca8a04",
                     hover_bg="#eab308",
                     pressed_bg="#a16207",
-                    checked_bg="#facc15",
+                    checked_bg="#a16207",
                     text_color="#111827",
                     border_color="#facc15")
                 self.pushButton_BGAreaRemove = QtWidgets.QPushButton("Remove area", self.groupBox_4)
@@ -694,27 +705,33 @@ class MainWindow(QtWidgets.QMainWindow, Ui_MainWindow):
                     border_color="#ef4444")
                 self.horizontalLayout_BGAreaButtons = QtWidgets.QHBoxLayout()
                 self.horizontalLayout_BGAreaButtons.setContentsMargins(0, 0, 0, 0)
+                self.horizontalLayout_BGAreaButtons.setSpacing(12)
                 self.horizontalLayout_BGAreaButtons.addWidget(self.pushButton_BGAreaAdd)
                 self.horizontalLayout_BGAreaButtons.addWidget(self.pushButton_BGAreaRemove)
                 self.horizontalLayout_BGAreaButtons.addWidget(self.pushButton_BGAreaClear)
-                self.gridLayout_9.addLayout(self.horizontalLayout_BGAreaButtons, 5, 0, 1, 3)
-                self.gridLayout_9.addWidget(self.pushButton_BGFit, 6, 0, 1, 3)
+                self.gridLayout_9.addLayout(self.horizontalLayout_BGAreaButtons, 2, 0, 1, 3)
+                self.label_BGAreaHelp = QtWidgets.QLabel(
+                    "Mouse: left-drag to add areas while Add area is pressed; right-click a yellow area to remove it; click Add area again to finish.",
+                    self.groupBox_4)
+                self.label_BGAreaHelp.setWordWrap(True)
+                self.gridLayout_9.addWidget(self.label_BGAreaHelp, 3, 0, 1, 3)
+                self.gridLayout_9.addWidget(self.pushButton_BGFit, 4, 0, 1, 3)
             self.gridLayout_9.setContentsMargins(12, 12, 12, 12)
-            self.gridLayout_9.setVerticalSpacing(12)
+            self.gridLayout_9.setVerticalSpacing(6)
         if hasattr(self, "groupBox_7"):
             self.groupBox_7.setVisible(False)
 
-    def _setup_cake_scale_layout(self):
+    def _setup_ccd_scale_layout(self):
         self.groupBox_29.setTitle("CCD scale")
         self.groupBox_29.setMinimumHeight(300)
         self.groupBox_29.setMaximumHeight(520)
-        self.pushButton_ResetCakeScale.setText("Reset")
-        self.pushButton_ResetCakeScale.setMinimumHeight(25)
-        self.pushButton_ResetCakeScale.setMaximumHeight(25)
+        self.pushButton_ResetCCDScale.setText("Reset")
+        self.pushButton_ResetCCDScale.setMinimumHeight(25)
+        self.pushButton_ResetCCDScale.setMaximumHeight(25)
 
-        self.cake_hist_widget = CakeHistogramWidget(self.groupBox_29)
-        self.cake_hist_widget.setMinimumHeight(190)
-        self.cake_hist_widget.setMaximumHeight(210)
+        self.ccd_hist_widget = CCDHistogramWidget(self.groupBox_29)
+        self.ccd_hist_widget.setMinimumHeight(280)
+        self.ccd_hist_widget.setMaximumHeight(300)
 
         # Hide legacy controls replaced by direct min/max + histogram controls.
         self.label_8.setVisible(False)
@@ -723,7 +740,7 @@ class MainWindow(QtWidgets.QMainWindow, Ui_MainWindow):
         self.horizontalSlider_VMax.setVisible(False)
         self.label_19.setVisible(False)
         self.horizontalSlider_MaxScaleBars.setVisible(False)
-        self.spinBox_MaxCakeScale.setVisible(False)
+        self.spinBox_MaxCCDScale.setVisible(False)
 
         # Clear and rebuild group layout.
         while self.verticalLayout_11.count():
@@ -733,101 +750,105 @@ class MainWindow(QtWidgets.QMainWindow, Ui_MainWindow):
                 w.setParent(self.groupBox_29)
 
         # Top block: start with Min/Max, then log and colormap.
-        self.frame_CakeTopGrid = QtWidgets.QFrame(self.groupBox_29)
-        self.frame_CakeTopGrid.setObjectName("frame_CakeTopGrid")
-        self.gridLayout_CakeTop = QtWidgets.QGridLayout(self.frame_CakeTopGrid)
-        self.gridLayout_CakeTop.setContentsMargins(0, 0, 0, 0)
-        self.gridLayout_CakeTop.setHorizontalSpacing(10)
-        self.gridLayout_CakeTop.setVerticalSpacing(4)
+        self.frame_CCDTopGrid = QtWidgets.QFrame(self.groupBox_29)
+        self.frame_CCDTopGrid.setObjectName("frame_CCDTopGrid")
+        self.frame_CCDTopGrid.setSizePolicy(
+            QtWidgets.QSizePolicy.Expanding, QtWidgets.QSizePolicy.Fixed)
+        self.gridLayout_CCDTop = QtWidgets.QGridLayout(self.frame_CCDTopGrid)
+        self.gridLayout_CCDTop.setContentsMargins(0, 0, 0, 0)
+        self.gridLayout_CCDTop.setHorizontalSpacing(10)
+        self.gridLayout_CCDTop.setVerticalSpacing(10)
 
-        self.cake_hist_widget.check_log.setParent(self.frame_CakeTopGrid)
-        self.cake_hist_widget.check_focus.setVisible(False)
-        self.cake_hist_widget.label_low.setVisible(False)
-        self.cake_hist_widget.spin_low_pct.setVisible(False)
-        self.cake_hist_widget.label_high.setVisible(False)
-        self.cake_hist_widget.spin_high_pct.setVisible(False)
-        self.cake_hist_widget.button_apply_pct.setVisible(False)
+        self.ccd_hist_widget.check_log.setParent(self.frame_CCDTopGrid)
+        self.ccd_hist_widget.check_focus.setVisible(False)
+        self.ccd_hist_widget.label_low.setVisible(False)
+        self.ccd_hist_widget.spin_low_pct.setVisible(False)
+        self.ccd_hist_widget.label_high.setVisible(False)
+        self.ccd_hist_widget.spin_high_pct.setVisible(False)
+        self.ccd_hist_widget.button_apply_pct.setVisible(False)
 
-        self.label_CCDScaleMin = QtWidgets.QLabel("Min", self.frame_CakeTopGrid)
-        self.doubleSpinBox_CCDScaleMin = QtWidgets.QDoubleSpinBox(self.frame_CakeTopGrid)
+        self.label_CCDScaleMin = QtWidgets.QLabel("Min", self.frame_CCDTopGrid)
+        self.doubleSpinBox_CCDScaleMin = QtWidgets.QDoubleSpinBox(self.frame_CCDTopGrid)
         self.doubleSpinBox_CCDScaleMin.setObjectName("doubleSpinBox_CCDScaleMin")
-        self.doubleSpinBox_CCDScaleMin.setDecimals(3)
+        self.doubleSpinBox_CCDScaleMin.setDecimals(2)
         self.doubleSpinBox_CCDScaleMin.setRange(-1.0e12, 1.0e12)
         self.doubleSpinBox_CCDScaleMin.setMinimumHeight(25)
         self.doubleSpinBox_CCDScaleMin.setKeyboardTracking(False)
         self.doubleSpinBox_CCDScaleMin.setAlignment(QtCore.Qt.AlignRight)
 
-        self.label_CCDScaleMax = QtWidgets.QLabel("Max", self.frame_CakeTopGrid)
-        self.doubleSpinBox_CCDScaleMax = QtWidgets.QDoubleSpinBox(self.frame_CakeTopGrid)
+        self.label_CCDScaleMax = QtWidgets.QLabel("Max", self.frame_CCDTopGrid)
+        self.doubleSpinBox_CCDScaleMax = QtWidgets.QDoubleSpinBox(self.frame_CCDTopGrid)
         self.doubleSpinBox_CCDScaleMax.setObjectName("doubleSpinBox_CCDScaleMax")
-        self.doubleSpinBox_CCDScaleMax.setDecimals(3)
+        self.doubleSpinBox_CCDScaleMax.setDecimals(2)
         self.doubleSpinBox_CCDScaleMax.setRange(-1.0e12, 1.0e12)
         self.doubleSpinBox_CCDScaleMax.setMinimumHeight(25)
         self.doubleSpinBox_CCDScaleMax.setKeyboardTracking(False)
         self.doubleSpinBox_CCDScaleMax.setAlignment(QtCore.Qt.AlignRight)
 
-        self.gridLayout_CakeTop.addWidget(self.label_CCDScaleMin, 0, 0, 1, 1)
-        self.gridLayout_CakeTop.addWidget(self.doubleSpinBox_CCDScaleMin, 0, 1, 1, 1)
-        self.gridLayout_CakeTop.addWidget(self.label_CCDScaleMax, 0, 2, 1, 1)
-        self.gridLayout_CakeTop.addWidget(self.doubleSpinBox_CCDScaleMax, 0, 3, 1, 1)
-        self.gridLayout_CakeTop.addWidget(self.cake_hist_widget.check_log, 1, 0, 1, 1)
+        self.gridLayout_CCDTop.addWidget(self.label_CCDScaleMin, 0, 0, 1, 1)
+        self.gridLayout_CCDTop.addWidget(self.doubleSpinBox_CCDScaleMin, 0, 1, 1, 1)
+        self.gridLayout_CCDTop.addWidget(self.label_CCDScaleMax, 0, 2, 1, 1)
+        self.gridLayout_CCDTop.addWidget(self.doubleSpinBox_CCDScaleMax, 0, 3, 1, 1)
+        self.gridLayout_CCDTop.addWidget(self.ccd_hist_widget.check_log, 1, 0, 1, 1)
 
-        if hasattr(self, "groupBox_CakeColormap"):
-            self.groupBox_CakeColormap.setVisible(False)
-        if hasattr(self, "label_CakeColormap"):
-            self.label_CakeColormap.setVisible(False)
-        if hasattr(self, "comboBox_CakeColormap"):
-            self.comboBox_CakeColormap.setParent(self.frame_CakeTopGrid)
-            self.comboBox_CakeColormap.setMinimumHeight(25)
+        if hasattr(self, "groupBox_CCDColormap"):
+            self.groupBox_CCDColormap.setVisible(False)
+        if hasattr(self, "label_CCDColormap"):
+            self.label_CCDColormap.setVisible(False)
+        if hasattr(self, "comboBox_CCDColormap"):
+            self.comboBox_CCDColormap.setParent(self.frame_CCDTopGrid)
+            self.comboBox_CCDColormap.setMinimumHeight(25)
             target_w = 160
-            self.comboBox_CakeColormap.setMinimumWidth(target_w)
-            self.comboBox_CakeColormap.setMaximumWidth(target_w)
-            self.comboBox_CakeColormap.setSizePolicy(
+            self.comboBox_CCDColormap.setMinimumWidth(target_w)
+            self.comboBox_CCDColormap.setMaximumWidth(target_w)
+            self.comboBox_CCDColormap.setSizePolicy(
                 QtWidgets.QSizePolicy.Fixed, QtWidgets.QSizePolicy.Fixed)
-            self.gridLayout_CakeTop.addWidget(self.comboBox_CakeColormap, 1, 1, 1, 2)
+            self.gridLayout_CCDTop.addWidget(self.comboBox_CCDColormap, 1, 1, 1, 2)
 
-        self.pushButton_ResetCakeScale.setParent(self.frame_CakeTopGrid)
-        self.gridLayout_CakeTop.addWidget(self.pushButton_ResetCakeScale, 1, 3, 1, 1)
-        self.gridLayout_CakeTop.setColumnStretch(1, 1)
-        self.gridLayout_CakeTop.setColumnStretch(3, 1)
+        self.pushButton_ResetCCDScale.setParent(self.frame_CCDTopGrid)
+        self.gridLayout_CCDTop.addWidget(self.pushButton_ResetCCDScale, 1, 3, 1, 1)
+        self.gridLayout_CCDTop.setColumnStretch(1, 1)
+        self.gridLayout_CCDTop.setColumnStretch(3, 1)
+        self.gridLayout_CCDTop.setRowStretch(0, 0)
+        self.gridLayout_CCDTop.setRowStretch(1, 0)
 
         # Histogram plot
-        self.cake_hist_widget.canvas.setParent(self.groupBox_29)
+        self.ccd_hist_widget.canvas.setParent(self.groupBox_29)
 
-        self.verticalLayout_11.setContentsMargins(10, 0, 10, 0)
-        self.verticalLayout_11.setSpacing(4)
-        self.verticalLayout_11.addWidget(self.frame_CakeTopGrid)
-        self.verticalLayout_11.addWidget(self.cake_hist_widget.canvas)
+        self.verticalLayout_11.setContentsMargins(10, 8, 10, 0)
+        self.verticalLayout_11.setSpacing(10)
+        self.verticalLayout_11.addWidget(self.frame_CCDTopGrid)
+        self.verticalLayout_11.addWidget(self.ccd_hist_widget.canvas, 1)
 
-    def _setup_cake_colormap_control(self):
+    def _setup_ccd_colormap_control(self):
         if not hasattr(self, "verticalLayout_PlotControl"):
             return
-        if hasattr(self, "groupBox_CakeColormap"):
+        if hasattr(self, "groupBox_CCDColormap"):
             return
-        self.groupBox_CakeColormap = QtWidgets.QGroupBox(
-            "2D Cake colormap", self.plotControlContents)
-        self.groupBox_CakeColormap.setObjectName("groupBox_CakeColormap")
-        self.horizontalLayout_CakeColormap = QtWidgets.QHBoxLayout(
-            self.groupBox_CakeColormap)
-        self.horizontalLayout_CakeColormap.setObjectName("horizontalLayout_CakeColormap")
-        self.label_CakeColormap = QtWidgets.QLabel("Colormap", self.groupBox_CakeColormap)
-        self.label_CakeColormap.setObjectName("label_CakeColormap")
-        self.comboBox_CakeColormap = QtWidgets.QComboBox(self.groupBox_CakeColormap)
-        self.comboBox_CakeColormap.setObjectName("comboBox_CakeColormap")
-        self.comboBox_CakeColormap.addItems([
+        self.groupBox_CCDColormap = QtWidgets.QGroupBox(
+            "2D CCD colormap", self.plotControlContents)
+        self.groupBox_CCDColormap.setObjectName("groupBox_CCDColormap")
+        self.horizontalLayout_CCDColormap = QtWidgets.QHBoxLayout(
+            self.groupBox_CCDColormap)
+        self.horizontalLayout_CCDColormap.setObjectName("horizontalLayout_CCDColormap")
+        self.label_CCDColormap = QtWidgets.QLabel("Colormap", self.groupBox_CCDColormap)
+        self.label_CCDColormap.setObjectName("label_CCDColormap")
+        self.comboBox_CCDColormap = QtWidgets.QComboBox(self.groupBox_CCDColormap)
+        self.comboBox_CCDColormap.setObjectName("comboBox_CCDColormap")
+        self.comboBox_CCDColormap.addItems([
             "inferno", "inferno_r",
             "magma", "magma_r",
             "gray", "gray_r",
             "viridis", "viridis_r",
         ])
-        self.comboBox_CakeColormap.setCurrentText("inferno")
-        self.horizontalLayout_CakeColormap.addWidget(self.label_CakeColormap)
-        self.horizontalLayout_CakeColormap.addWidget(self.comboBox_CakeColormap, 1)
+        self.comboBox_CCDColormap.setCurrentText("inferno")
+        self.horizontalLayout_CCDColormap.addWidget(self.label_CCDColormap)
+        self.horizontalLayout_CCDColormap.addWidget(self.comboBox_CCDColormap, 1)
         idx_gray = self.verticalLayout_PlotControl.indexOf(self.groupBox_29)
         if idx_gray < 0:
-            self.verticalLayout_PlotControl.insertWidget(0, self.groupBox_CakeColormap)
+            self.verticalLayout_PlotControl.insertWidget(0, self.groupBox_CCDColormap)
         else:
-            self.verticalLayout_PlotControl.insertWidget(idx_gray + 1, self.groupBox_CakeColormap)
+            self.verticalLayout_PlotControl.insertWidget(idx_gray + 1, self.groupBox_CCDColormap)
 
     def _setup_ccd_roi_group(self):
         if not hasattr(self, "verticalLayout_21"):
@@ -840,17 +861,22 @@ class MainWindow(QtWidgets.QMainWindow, Ui_MainWindow):
         self.gridLayout_CCDRoi.setContentsMargins(12, 12, 12, 12)
         self.gridLayout_CCDRoi.setHorizontalSpacing(10)
         self.gridLayout_CCDRoi.setVerticalSpacing(8)
+        ccd_row_spin_width = 90
         self.label_CCDRowMin = QtWidgets.QLabel("Row min", self.groupBox_CCDRoi)
         self.spinBox_CCDRowMin = QtWidgets.QSpinBox(self.groupBox_CCDRoi)
         self.spinBox_CCDRowMin.setMinimum(0)
         self.spinBox_CCDRowMin.setMaximum(0)
         self.spinBox_CCDRowMin.setMinimumHeight(25)
+        self.spinBox_CCDRowMin.setMinimumWidth(ccd_row_spin_width)
+        self.spinBox_CCDRowMin.setMaximumWidth(ccd_row_spin_width)
         self.spinBox_CCDRowMin.setAlignment(QtCore.Qt.AlignRight)
         self.label_CCDRowMax = QtWidgets.QLabel("Row max", self.groupBox_CCDRoi)
         self.spinBox_CCDRowMax = QtWidgets.QSpinBox(self.groupBox_CCDRoi)
         self.spinBox_CCDRowMax.setMinimum(0)
         self.spinBox_CCDRowMax.setMaximum(0)
         self.spinBox_CCDRowMax.setMinimumHeight(25)
+        self.spinBox_CCDRowMax.setMinimumWidth(ccd_row_spin_width)
+        self.spinBox_CCDRowMax.setMaximumWidth(ccd_row_spin_width)
         self.spinBox_CCDRowMax.setAlignment(QtCore.Qt.AlignRight)
         self.pushButton_CCDSelectRoi = QtWidgets.QPushButton("Select ROI", self.groupBox_CCDRoi)
         self.pushButton_CCDSelectRoi.setObjectName("pushButton_CCDSelectRoi")
@@ -939,10 +965,22 @@ class MainWindow(QtWidgets.QMainWindow, Ui_MainWindow):
         self.lineEdit_DiffRefChi.setObjectName("lineEdit_DiffRefChi")
         self.pushButton_DiffRefBrowse = QtWidgets.QPushButton("Browse...", self.groupBox_DiffRef)
         self.pushButton_DiffRefBrowse.setObjectName("pushButton_DiffRefBrowse")
+        self.pushButton_DiffRefBrowse.setMinimumHeight(25)
+        self.pushButton_DiffRefBrowse.setMaximumHeight(25)
+        self._set_action_button_style(
+            self.pushButton_DiffRefBrowse,
+            base_bg="#15803d",
+            hover_bg="#16a34a",
+            pressed_bg="#166534",
+            checked_bg="#166534",
+            text_color="#f8fafc",
+            border_color="#22c55e")
         self.pushButton_DiffRefBrowse.setSizePolicy(
             QtWidgets.QSizePolicy.Expanding, QtWidgets.QSizePolicy.Fixed)
         self.pushButton_DiffRefClear = QtWidgets.QPushButton("Clear", self.groupBox_DiffRef)
         self.pushButton_DiffRefClear.setObjectName("pushButton_DiffRefClear")
+        self.pushButton_DiffRefClear.setMinimumHeight(25)
+        self.pushButton_DiffRefClear.setMaximumHeight(25)
         self.pushButton_DiffRefClear.setSizePolicy(
             QtWidgets.QSizePolicy.Expanding, QtWidgets.QSizePolicy.Fixed)
         self.checkBox_UseDiffMode = QtWidgets.QCheckBox("Enable Diff mode", self.groupBox_DiffRef)
@@ -962,35 +1000,35 @@ class MainWindow(QtWidgets.QMainWindow, Ui_MainWindow):
         self.gridLayout_DiffRef.setColumnStretch(1, 1)
         self.gridLayout_DiffRef.setColumnStretch(2, 1)
 
-        # 2D rendering controls for diff cake.
-        self.groupBox_DiffCake = QtWidgets.QGroupBox("Diff 2D Scale", self.diffContents)
-        self.groupBox_DiffCake.setObjectName("groupBox_DiffCake")
-        self.gridLayout_DiffCake = QtWidgets.QGridLayout(self.groupBox_DiffCake)
-        self.gridLayout_DiffCake.setObjectName("gridLayout_DiffCake")
-        self.label_DiffScaleMode = QtWidgets.QLabel("Mode", self.groupBox_DiffCake)
+        # 2D rendering controls for diff ccd.
+        self.groupBox_DiffCCD = QtWidgets.QGroupBox("Diff 2D Scale", self.diffContents)
+        self.groupBox_DiffCCD.setObjectName("groupBox_DiffCCD")
+        self.gridLayout_DiffCCD = QtWidgets.QGridLayout(self.groupBox_DiffCCD)
+        self.gridLayout_DiffCCD.setObjectName("gridLayout_DiffCCD")
+        self.label_DiffScaleMode = QtWidgets.QLabel("Mode", self.groupBox_DiffCCD)
         self.label_DiffScaleMode.setObjectName("label_DiffScaleMode")
-        self.comboBox_DiffScaleMode = QtWidgets.QComboBox(self.groupBox_DiffCake)
+        self.comboBox_DiffScaleMode = QtWidgets.QComboBox(self.groupBox_DiffCCD)
         self.comboBox_DiffScaleMode.setObjectName("comboBox_DiffScaleMode")
         self.comboBox_DiffScaleMode.addItems([
             "0 Centered",
             "Free range",
         ])
-        self.label_DiffCmap = QtWidgets.QLabel("Colormap", self.groupBox_DiffCake)
+        self.label_DiffCmap = QtWidgets.QLabel("Colormap", self.groupBox_DiffCCD)
         self.label_DiffCmap.setObjectName("label_DiffCmap")
-        self.comboBox_DiffCmap = QtWidgets.QComboBox(self.groupBox_DiffCake)
+        self.comboBox_DiffCmap = QtWidgets.QComboBox(self.groupBox_DiffCCD)
         self.comboBox_DiffCmap.setObjectName("comboBox_DiffCmap")
-        self.label_DiffVmin = QtWidgets.QLabel("Min", self.groupBox_DiffCake)
+        self.label_DiffVmin = QtWidgets.QLabel("Min", self.groupBox_DiffCCD)
         self.label_DiffVmin.setObjectName("label_DiffVmin")
-        self.doubleSpinBox_DiffVmin = QtWidgets.QDoubleSpinBox(self.groupBox_DiffCake)
+        self.doubleSpinBox_DiffVmin = QtWidgets.QDoubleSpinBox(self.groupBox_DiffCCD)
         self.doubleSpinBox_DiffVmin.setObjectName("doubleSpinBox_DiffVmin")
         self.doubleSpinBox_DiffVmin.setDecimals(0)
         self.doubleSpinBox_DiffVmin.setMinimum(-1e9)
         self.doubleSpinBox_DiffVmin.setMaximum(1e9)
         self.doubleSpinBox_DiffVmin.setSingleStep(1.0)
         self.doubleSpinBox_DiffVmin.setValue(-1000.0)
-        self.label_DiffVmax = QtWidgets.QLabel("Max", self.groupBox_DiffCake)
+        self.label_DiffVmax = QtWidgets.QLabel("Max", self.groupBox_DiffCCD)
         self.label_DiffVmax.setObjectName("label_DiffVmax")
-        self.doubleSpinBox_DiffVmax = QtWidgets.QDoubleSpinBox(self.groupBox_DiffCake)
+        self.doubleSpinBox_DiffVmax = QtWidgets.QDoubleSpinBox(self.groupBox_DiffCCD)
         self.doubleSpinBox_DiffVmax.setObjectName("doubleSpinBox_DiffVmax")
         self.doubleSpinBox_DiffVmax.setDecimals(0)
         self.doubleSpinBox_DiffVmax.setMinimum(-1e9)
@@ -998,17 +1036,19 @@ class MainWindow(QtWidgets.QMainWindow, Ui_MainWindow):
         self.doubleSpinBox_DiffVmax.setSingleStep(1.0)
         self.doubleSpinBox_DiffVmax.setValue(1000.0)
         self.pushButton_DiffScaleToData = QtWidgets.QPushButton(
-            "Use diff min/max", self.groupBox_DiffCake)
+            "Use diff min/max", self.groupBox_DiffCCD)
         self.pushButton_DiffScaleToData.setObjectName("pushButton_DiffScaleToData")
-        self.gridLayout_DiffCake.addWidget(self.label_DiffScaleMode, 0, 0, 1, 1)
-        self.gridLayout_DiffCake.addWidget(self.comboBox_DiffScaleMode, 0, 1, 1, 1)
-        self.gridLayout_DiffCake.addWidget(self.label_DiffCmap, 0, 2, 1, 1)
-        self.gridLayout_DiffCake.addWidget(self.comboBox_DiffCmap, 0, 3, 1, 1)
-        self.gridLayout_DiffCake.addWidget(self.label_DiffVmin, 1, 0, 1, 1)
-        self.gridLayout_DiffCake.addWidget(self.doubleSpinBox_DiffVmin, 1, 1, 1, 1)
-        self.gridLayout_DiffCake.addWidget(self.label_DiffVmax, 1, 2, 1, 1)
-        self.gridLayout_DiffCake.addWidget(self.doubleSpinBox_DiffVmax, 1, 3, 1, 1)
-        self.gridLayout_DiffCake.addWidget(self.pushButton_DiffScaleToData, 2, 0, 1, 4)
+        self.pushButton_DiffScaleToData.setMinimumHeight(25)
+        self.pushButton_DiffScaleToData.setMaximumHeight(25)
+        self.gridLayout_DiffCCD.addWidget(self.label_DiffScaleMode, 0, 0, 1, 1)
+        self.gridLayout_DiffCCD.addWidget(self.comboBox_DiffScaleMode, 0, 1, 1, 1)
+        self.gridLayout_DiffCCD.addWidget(self.label_DiffCmap, 0, 2, 1, 1)
+        self.gridLayout_DiffCCD.addWidget(self.comboBox_DiffCmap, 0, 3, 1, 1)
+        self.gridLayout_DiffCCD.addWidget(self.label_DiffVmin, 1, 0, 1, 1)
+        self.gridLayout_DiffCCD.addWidget(self.doubleSpinBox_DiffVmin, 1, 1, 1, 1)
+        self.gridLayout_DiffCCD.addWidget(self.label_DiffVmax, 1, 2, 1, 1)
+        self.gridLayout_DiffCCD.addWidget(self.doubleSpinBox_DiffVmax, 1, 3, 1, 1)
+        self.gridLayout_DiffCCD.addWidget(self.pushButton_DiffScaleToData, 2, 0, 1, 4)
 
         # Export outputs only on demand.
         self.groupBox_DiffExport = QtWidgets.QGroupBox("Export", self.diffContents)
@@ -1017,13 +1057,17 @@ class MainWindow(QtWidgets.QMainWindow, Ui_MainWindow):
         self.horizontalLayout_DiffExport.setObjectName("horizontalLayout_DiffExport")
         self.pushButton_ExportDiffChi = QtWidgets.QPushButton("Export Diff CHI", self.groupBox_DiffExport)
         self.pushButton_ExportDiffChi.setObjectName("pushButton_ExportDiffChi")
-        self.pushButton_ExportDiffCakeNpy = QtWidgets.QPushButton("Export Diff Cake NPY", self.groupBox_DiffExport)
-        self.pushButton_ExportDiffCakeNpy.setObjectName("pushButton_ExportDiffCakeNpy")
+        self.pushButton_ExportDiffChi.setMinimumHeight(25)
+        self.pushButton_ExportDiffChi.setMaximumHeight(25)
+        self.pushButton_ExportDiffCCDNpy = QtWidgets.QPushButton("Export Diff CCD NPY", self.groupBox_DiffExport)
+        self.pushButton_ExportDiffCCDNpy.setObjectName("pushButton_ExportDiffCCDNpy")
+        self.pushButton_ExportDiffCCDNpy.setMinimumHeight(25)
+        self.pushButton_ExportDiffCCDNpy.setMaximumHeight(25)
         self.horizontalLayout_DiffExport.addWidget(self.pushButton_ExportDiffChi)
-        self.horizontalLayout_DiffExport.addWidget(self.pushButton_ExportDiffCakeNpy)
+        self.horizontalLayout_DiffExport.addWidget(self.pushButton_ExportDiffCCDNpy)
 
         self.verticalLayout_DiffContents.addWidget(self.groupBox_DiffRef)
-        self.verticalLayout_DiffContents.addWidget(self.groupBox_DiffCake)
+        self.verticalLayout_DiffContents.addWidget(self.groupBox_DiffCCD)
         self.verticalLayout_DiffContents.addWidget(self.groupBox_DiffExport)
         self.verticalLayout_DiffContents.addStretch(1)
         self.scrollArea_Diff.setWidget(self.diffContents)
@@ -1215,14 +1259,14 @@ class MainWindow(QtWidgets.QMainWindow, Ui_MainWindow):
         self.label_MapVmin = QtWidgets.QLabel("Min", self.groupBox_MapScale)
         self.doubleSpinBox_MapVmin = QtWidgets.QDoubleSpinBox(self.groupBox_MapScale)
         self.doubleSpinBox_MapVmin.setObjectName("doubleSpinBox_MapVmin")
-        self.doubleSpinBox_MapVmin.setDecimals(6)
+        self.doubleSpinBox_MapVmin.setDecimals(2)
         self.doubleSpinBox_MapVmin.setMinimum(-1e12)
         self.doubleSpinBox_MapVmin.setMaximum(1e12)
         self.doubleSpinBox_MapVmin.setMinimumSize(QtCore.QSize(100, 28))
         self.label_MapVmax = QtWidgets.QLabel("Max", self.groupBox_MapScale)
         self.doubleSpinBox_MapVmax = QtWidgets.QDoubleSpinBox(self.groupBox_MapScale)
         self.doubleSpinBox_MapVmax.setObjectName("doubleSpinBox_MapVmax")
-        self.doubleSpinBox_MapVmax.setDecimals(6)
+        self.doubleSpinBox_MapVmax.setDecimals(2)
         self.doubleSpinBox_MapVmax.setMinimum(-1e12)
         self.doubleSpinBox_MapVmax.setMaximum(1e12)
         self.doubleSpinBox_MapVmax.setMinimumSize(QtCore.QSize(100, 28))
@@ -1744,24 +1788,31 @@ class MainWindow(QtWidgets.QMainWindow, Ui_MainWindow):
             "}"
             "QPushButton:pressed {"
             f"background-color: {pressed_bg};"
+            "border: 2px solid #111827;"
+            "padding-top: 2px;"
+            "padding-left: 11px;"
+            "padding-right: 9px;"
             "}"
             "QPushButton:checked {"
             f"background-color: {checked_bg};"
-            f"border: 1px solid {checked_bg};"
+            "border: 2px solid #111827;"
+            "padding-top: 2px;"
+            "padding-left: 11px;"
+            "padding-right: 9px;"
             "}"
         )
 
     def _apply_rampo_labels(self):
         self.setWindowTitle("Rampo ver. " + str(__version__))
-        if hasattr(self, "checkBox_ShowCake"):
-            self.checkBox_ShowCake.setText("CCD")
-            self.checkBox_ShowCake.setToolTip("Show CCD image")
+        if hasattr(self, "checkBox_ShowCCD"):
+            self.checkBox_ShowCCD.setText("CCD")
+            self.checkBox_ShowCCD.setToolTip("Show CCD image")
         if hasattr(self, "tabWidget") and hasattr(self, "tab_JCPDSList2"):
             idx = self.tabWidget.indexOf(self.tab_JCPDSList2)
             if idx >= 0:
                 self.tabWidget.setTabText(idx, "RAPO")
-        if hasattr(self, "tabWidget") and hasattr(self, "tab_Cake1"):
-            idx = self.tabWidget.indexOf(self.tab_Cake1)
+        if hasattr(self, "tabWidget") and hasattr(self, "tab_CCD1"):
+            idx = self.tabWidget.indexOf(self.tab_CCD1)
             if idx >= 0:
                 self.tabWidget.setTabText(idx, "CCD")
         if hasattr(self, "pushButton_NewJlist"):
@@ -1781,7 +1832,7 @@ class MainWindow(QtWidgets.QMainWindow, Ui_MainWindow):
                 base_bg="#ca8a04",
                 hover_bg="#eab308",
                 pressed_bg="#a16207",
-                checked_bg="#facc15",
+                checked_bg="#a16207",
                 text_color="#111827",
                 border_color="#facc15")
         if hasattr(self, "pushButton_ConductFitting"):
@@ -1873,10 +1924,25 @@ class MainWindow(QtWidgets.QMainWindow, Ui_MainWindow):
                 self.label_LaserWavelength = QtWidgets.QLabel("Laser wavelength", self.frame_4)
                 self.label_LaserWavelength.setObjectName("label_LaserWavelength")
                 self.horizontalLayout_11.insertWidget(0, self.label_LaserWavelength)
+            if not hasattr(self, "checkBox_SpectrumWavenumber"):
+                self.checkBox_SpectrumWavenumber = QtWidgets.QCheckBox("Wavenumber", self.frame_4)
+                self.checkBox_SpectrumWavenumber.setObjectName("checkBox_SpectrumWavenumber")
+                self.checkBox_SpectrumWavenumber.setChecked(True)
+                self.checkBox_SpectrumWavenumber.setToolTip(
+                    "Checked: show Raman shift (cm-1). Unchecked: show wavelength (nm).")
+            if hasattr(self, "label_XRayEnergy"):
+                self.horizontalLayout_11.removeWidget(self.label_XRayEnergy)
+                self.horizontalLayout_11.removeWidget(self.checkBox_SpectrumWavenumber)
+                spin_idx = self.horizontalLayout_11.indexOf(self.doubleSpinBox_SetWavelength)
+                self.horizontalLayout_11.insertWidget(spin_idx + 1, self.label_XRayEnergy)
+                self.horizontalLayout_11.insertSpacing(spin_idx + 2, 12)
+                self.horizontalLayout_11.insertWidget(spin_idx + 3, self.checkBox_SpectrumWavenumber)
             self.horizontalLayout_11.setAlignment(
                 self.label_LaserWavelength, QtCore.Qt.AlignVCenter)
             self.horizontalLayout_11.setAlignment(
                 self.doubleSpinBox_SetWavelength, QtCore.Qt.AlignVCenter)
+            self.horizontalLayout_11.setAlignment(
+                self.checkBox_SpectrumWavenumber, QtCore.Qt.AlignVCenter)
             if hasattr(self, "label_XRayEnergy"):
                 self.horizontalLayout_11.setAlignment(
                     self.label_XRayEnergy, QtCore.Qt.AlignVCenter)
@@ -1888,14 +1954,14 @@ class MainWindow(QtWidgets.QMainWindow, Ui_MainWindow):
                 getattr(self, name).setVisible(False)
         if hasattr(self, "pushButton_UpdateBackground"):
             self.pushButton_UpdateBackground.setVisible(False)
-        if hasattr(self, "pushButton_ResetCakeScale"):
-            self.pushButton_ResetCakeScale.setToolTip("Reset CCD contrast scale")
+        if hasattr(self, "pushButton_ResetCCDScale"):
+            self.pushButton_ResetCCDScale.setToolTip("Reset CCD contrast scale")
         if hasattr(self, "pushButton_AddRemoveFromMouse"):
             self.pushButton_AddRemoveFromMouse.setText("Pick peaks")
             self.pushButton_AddRemoveFromMouse.setToolTip(
                 "Left click to add a peak, left drag to set peak width, right click to remove the nearest peak")
         if hasattr(self, "doubleSpinBox_InitialFWHM"):
-            self.doubleSpinBox_InitialFWHM.setValue(5.0)
+            self.doubleSpinBox_InitialFWHM.setValue(2.0)
             self.doubleSpinBox_InitialFWHM.hide()
         if hasattr(self, "label_13"):
             self.label_13.hide()
@@ -1927,8 +1993,8 @@ class MainWindow(QtWidgets.QMainWindow, Ui_MainWindow):
                 getattr(self, name).setVisible(False)
 
     def _disable_ccd_tab(self):
-        if hasattr(self, "tabWidget") and hasattr(self, "tab_Cake1"):
-            idx = self.tabWidget.indexOf(self.tab_Cake1)
+        if hasattr(self, "tabWidget") and hasattr(self, "tab_CCD1"):
+            idx = self.tabWidget.indexOf(self.tab_CCD1)
             if idx >= 0:
                 self.tabWidget.removeTab(idx)
 
@@ -2004,6 +2070,8 @@ class MainWindow(QtWidgets.QMainWindow, Ui_MainWindow):
         self.gridLayout_SpectrumSmooth.addWidget(self.spinBox_SpectrumSGPoly, 2, 2, 1, 1)
         self.pushButton_SpectrumRaw = QtWidgets.QPushButton("Go back to raw", self.groupBox_SpectrumSmooth)
         self.pushButton_SpectrumRaw.setObjectName("pushButton_SpectrumRaw")
+        self.pushButton_SpectrumRaw.setMinimumHeight(25)
+        self.pushButton_SpectrumRaw.setMaximumHeight(25)
         self.gridLayout_SpectrumSmooth.addWidget(self.pushButton_SpectrumRaw, 3, 0, 1, 3)
         self.gridLayout_SpectrumSmooth.setColumnStretch(1, 1)
         self.verticalLayout_21.insertWidget(3, self.groupBox_SpectrumSmooth)

@@ -639,7 +639,7 @@ def _collect_companion_files(param_dir):
     in backup snapshots as well.
     """
     suffixes = (
-        ".poni", ".cake.npy", ".bg.chi", ".bgsub.chi", ".cakeformat",
+        ".poni", ".ccd.npy", ".bg.chi", ".bgsub.chi", ".ccdformat",
         "smooth.chi",
     )
     rel_files = set()
@@ -654,19 +654,19 @@ def _collect_companion_files(param_dir):
 
 def _prepare_payloads(model, param_dir, ui_state=None):
     chi_root = model.chi_path
-    cake_tth_file = None
-    cake_azi_file = None
-    cake_int_file = None
+    ccd_tth_file = None
+    ccd_azi_file = None
+    ccd_int_file = None
     mask_file = None
     if model.diff_img is not None:
         if model.diff_img.img_filename is not None:
             base = os.path.splitext(os.path.basename(model.diff_img.img_filename))[0]
         else:
-            base = "cake"
-        # Keep historical naming style used by write_temp_cakefiles.
-        cake_tth_file = f"{base}.tth.cake.npy" if model.diff_img.tth_cake is not None else None
-        cake_azi_file = f"{base}.azi.cake.npy" if model.diff_img.chi_cake is not None else None
-        cake_int_file = f"{base}.int.cake.npy" if model.diff_img.intensity_cake is not None else None
+            base = "ccd"
+        # Keep historical naming style used by write_temp_ccdfiles.
+        ccd_tth_file = f"{base}.tth.ccd.npy" if model.diff_img.tth_ccd is not None else None
+        ccd_azi_file = f"{base}.azi.ccd.npy" if model.diff_img.chi_ccd is not None else None
+        ccd_int_file = f"{base}.int.ccd.npy" if model.diff_img.intensity_ccd is not None else None
         mask_file = f"{base}.mask.npy" if model.diff_img.mask is not None else None
 
     waterfall_payloads = {}
@@ -700,9 +700,9 @@ def _prepare_payloads(model, param_dir, ui_state=None):
         "diff_img": {
             "img_filename": _relpath_or_abs(getattr(model.diff_img, "img_filename", None), chi_root),
             "mask_file": mask_file,
-            "cake_tth_file": cake_tth_file,
-            "cake_azi_file": cake_azi_file,
-            "cake_int_file": cake_int_file,
+            "ccd_tth_file": ccd_tth_file,
+            "ccd_azi_file": ccd_azi_file,
+            "ccd_int_file": ccd_int_file,
         },
         "current_section_index": None,
     }
@@ -913,15 +913,15 @@ def save_model_to_param(
             except Exception:
                 pass
 
-    # Keep cake naming/style consistent with existing temp npy files.
+    # Keep ccd naming/style consistent with existing temp npy files.
     if model.diff_img is not None:
-        if model.diff_img.tth_cake is not None and model.diff_img.chi_cake is not None and model.diff_img.intensity_cake is not None:
+        if model.diff_img.tth_ccd is not None and model.diff_img.chi_ccd is not None and model.diff_img.intensity_ccd is not None:
             try:
-                model.diff_img.write_temp_cakefiles(temp_dir=param_dir)
+                model.diff_img.write_temp_ccdfiles(temp_dir=param_dir)
             except Exception:
                 pass
         diff_info = session_data.get("diff_img", {})
-        for key in ("cake_tth_file", "cake_azi_file", "cake_int_file"):
+        for key in ("ccd_tth_file", "ccd_azi_file", "ccd_int_file"):
             rel = diff_info.get(key)
             if rel is None:
                 continue
@@ -948,7 +948,7 @@ def save_model_to_param(
     if os.path.exists(smooth_full):
         payload_map[smooth_name] = _file_bytes(smooth_full)
 
-    # Include companion files (e.g., poni/cakeformat/cake npy/bg chi) in
+    # Include companion files (e.g., poni/ccdformat/ccd npy/bg chi) in
     # change detection + backups, preserving historical PARAM usage.
     for rel in _collect_companion_files(param_dir):
         full = os.path.join(param_dir, rel)
@@ -1163,31 +1163,31 @@ def load_model_from_param(model, base_chi_file, backup_event_id=None, backup_eve
     img_filename = _resolve_path(diff_img_info.get("img_filename"), chi_root)
     has_any = any(
         diff_img_info.get(k) is not None
-        for k in ("mask_file", "cake_tth_file", "cake_azi_file", "cake_int_file")
+        for k in ("mask_file", "ccd_tth_file", "ccd_azi_file", "ccd_int_file")
     ) or (img_filename is not None)
     if has_any:
         diff = DiffImg()
         diff.img_filename = img_filename
         mask_file = diff_img_info.get("mask_file")
-        cake_tth_file = diff_img_info.get("cake_tth_file")
-        cake_azi_file = diff_img_info.get("cake_azi_file")
-        cake_int_file = diff_img_info.get("cake_int_file")
+        ccd_tth_file = diff_img_info.get("ccd_tth_file")
+        ccd_azi_file = diff_img_info.get("ccd_azi_file")
+        ccd_int_file = diff_img_info.get("ccd_int_file")
         if mask_file is not None:
             f = os.path.join(snapshot_dir, mask_file)
             if os.path.exists(f):
                 diff.mask = np.load(f, allow_pickle=False)
-        if cake_tth_file is not None:
-            f = os.path.join(snapshot_dir, cake_tth_file)
+        if ccd_tth_file is not None:
+            f = os.path.join(snapshot_dir, ccd_tth_file)
             if os.path.exists(f):
-                diff.tth_cake = np.load(f, allow_pickle=False)
-        if cake_azi_file is not None:
-            f = os.path.join(snapshot_dir, cake_azi_file)
+                diff.tth_ccd = np.load(f, allow_pickle=False)
+        if ccd_azi_file is not None:
+            f = os.path.join(snapshot_dir, ccd_azi_file)
             if os.path.exists(f):
-                diff.chi_cake = np.load(f, allow_pickle=False)
-        if cake_int_file is not None:
-            f = os.path.join(snapshot_dir, cake_int_file)
+                diff.chi_ccd = np.load(f, allow_pickle=False)
+        if ccd_int_file is not None:
+            f = os.path.join(snapshot_dir, ccd_int_file)
             if os.path.exists(f):
-                diff.intensity_cake = np.load(f, allow_pickle=False)
+                diff.intensity_ccd = np.load(f, allow_pickle=False)
         model.diff_img = diff
         try:
             if hasattr(model.diff_img, "apply_excitation_wavelength") and \
@@ -1210,7 +1210,7 @@ def load_model_from_param(model, base_chi_file, backup_event_id=None, backup_eve
             "pressure": (("saved_pressure" in jcpds_data) or ("saved_pressure" in session_data)),
             "temperature": (("saved_temperature" in jcpds_data) or ("saved_temperature" in session_data)),
             "spectrum_smoothing": (ui_data.get("ui_state", {}).get("spectrum", {}) != {}),
-            "cake_z_scale": (ui_data.get("ui_state", {}).get("cake", {}) != {}),
+            "ccd_z_scale": (ui_data.get("ui_state", {}).get("ccd", {}) != {}),
             "ccd_roi": (ui_data.get("ui_state", {}).get("ccd_roi", {}) != {}),
             "background": (ui_data.get("ui_state", {}).get("background", {}) != {}),
             "waterfall_list": (len(session_data.get("waterfall_patterns", [])) > 0),

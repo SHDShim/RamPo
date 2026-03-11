@@ -36,7 +36,7 @@ class JcpdsController(object):
         self.widget.pushButton_ViewJCPDS.clicked.connect(self.view_jcpds)
         self.widget.checkBox_JCPDSinPattern.clicked.connect(
             lambda: self._apply_changes_to_graph(limits=None))
-        self.widget.checkBox_JCPDSinCake.clicked.connect(
+        self.widget.checkBox_JCPDSinCCD.clicked.connect(
             lambda: self._apply_changes_to_graph(limits=None))
         self.widget.pushButton_ForceUpdatePlot.clicked.connect(
             lambda: self._apply_changes_to_graph(limits=None))

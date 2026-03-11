@@ -41,10 +41,10 @@ class MplCanvas(FigureCanvasQTAgg):
         self.setSizePolicy(QtWidgets.QSizePolicy.Expanding, QtWidgets.QSizePolicy.Expanding)
         self.updateGeometry()
 
-    def _define_axes(self, h_cake):
+    def _define_axes(self, h_ccd):
         self.gs = GridSpec(100, 1)
-        self.ax_pattern = self.fig.add_subplot(self.gs[h_cake + 1 : 99, 0])
-        self.ax_cake = self.fig.add_subplot(self.gs[0:h_cake, 0], sharex=self.ax_pattern)
+        self.ax_pattern = self.fig.add_subplot(self.gs[h_ccd + 1 : 99, 0])
+        self.ax_ccd = self.fig.add_subplot(self.gs[0:h_ccd, 0], sharex=self.ax_pattern)
         self.ax_pattern.set_ylabel("Intensity (arbitrary unit)")
         self.ax_pattern.ticklabel_format(axis="y", style="sci", scilimits=(-2, 2))
         self.ax_pattern.get_yaxis().get_offset_text().set_position((-0.04, -0.1))
@@ -64,20 +64,20 @@ class MplCanvas(FigureCanvasQTAgg):
     def _style_axes(self):
         self.fig.set_facecolor(self.figureColor)
         self.fig.set_edgecolor(self.figureColor)
-        for axis in (self.ax_pattern, self.ax_cake):
+        for axis in (self.ax_pattern, self.ax_ccd):
             self._style_axis(axis)
 
-    def resize_axes(self, h_cake):
+    def resize_axes(self, h_ccd):
         self.fig.clf()
-        self._define_axes(h_cake)
-        if h_cake == 1:
-            self.ax_cake.tick_params(axis="y", colors=self.objColor, labelleft=False)
-            self.ax_cake.spines["right"].set_visible(False)
-            self.ax_cake.spines["left"].set_visible(False)
-            self.ax_cake.spines["top"].set_visible(False)
-            self.ax_cake.spines["bottom"].set_visible(False)
-        elif h_cake >= 10:
-            self.ax_cake.set_ylabel("Azimuth (degrees)")
+        self._define_axes(h_ccd)
+        if h_ccd == 1:
+            self.ax_ccd.tick_params(axis="y", colors=self.objColor, labelleft=False)
+            self.ax_ccd.spines["right"].set_visible(False)
+            self.ax_ccd.spines["left"].set_visible(False)
+            self.ax_ccd.spines["top"].set_visible(False)
+            self.ax_ccd.spines["bottom"].set_visible(False)
+        elif h_ccd >= 10:
+            self.ax_ccd.set_ylabel("Azimuth (degrees)")
         self._style_axes()
 
     def set_toNight(self, NightView=True):
@@ -103,7 +103,7 @@ class MplCanvas(FigureCanvasQTAgg):
             self.figureColor = "white"
 
         self._style_axes()
-        self.ax_cake.tick_params(
+        self.ax_ccd.tick_params(
             which="both",
             axis="x",
             colors=self.objColor,
@@ -111,7 +111,7 @@ class MplCanvas(FigureCanvasQTAgg):
             labelbottom=False,
             labeltop=False,
         )
-        self.ax_cake.tick_params(axis="x", which="both", length=0)
+        self.ax_ccd.tick_params(axis="x", which="both", length=0)
         self.ax_pattern.xaxis.set_label_position("bottom")
 
         try:

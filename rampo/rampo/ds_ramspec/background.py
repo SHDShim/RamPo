@@ -12,7 +12,7 @@ def fit_bg_poly(x, y_obs, poly_order=5, fit_areas=None):
     valid = np.isfinite(x_arr) & np.isfinite(y_arr)
     if np.count_nonzero(valid) < 2:
         return np.asarray(y_arr, dtype=float)
-    if fit_areas:
+    if fit_areas is not None:
         area_mask = np.zeros_like(valid, dtype=bool)
         for area in fit_areas:
             try:
@@ -25,7 +25,7 @@ def fit_bg_poly(x, y_obs, poly_order=5, fit_areas=None):
             area_mask |= (x_arr >= xmin) & (x_arr <= xmax)
         fit_mask = valid & area_mask
         if np.count_nonzero(fit_mask) < 2:
-            fit_mask = valid
+            return np.zeros_like(y_arr, dtype=float)
     else:
         fit_mask = valid
     x_fit = x_arr[fit_mask]

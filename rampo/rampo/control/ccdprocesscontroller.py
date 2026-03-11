@@ -11,7 +11,7 @@ class CCDProcessController(object):
 
     def cook(self):
         self.read_settings()
-        self.model.diff_img.integrate_to_cake()
+        self.model.diff_img.integrate_to_ccd()
 
 
-CakemakeController = CCDProcessController
+CCDmakeController = CCDProcessController

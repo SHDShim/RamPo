@@ -45,18 +45,26 @@ class MplController(object):
             
             def zoom_wrapper(*args, **kwargs):
                 result = self._original_zoom(*args, **kwargs)
-                self._toolbar_active = (toolbar.mode != '')
+                mode_text = self._toolbar_mode_text(toolbar)
+                self._toolbar_active = bool(mode_text)
                 # ✅ NEW: Uncheck cursor when zoom is activated
-                if toolbar.mode == 'zoom rect':
-                    self.widget.checkBox_LongCursor.setChecked(False)
+                if mode_text == 'zoom rect':
+                    main_ctrl = getattr(self.widget, "_main_controller", None)
+                    if main_ctrl is not None and \
+                            hasattr(main_ctrl, "_deactivate_plot_mouse_modes_for_toolbar"):
+                        main_ctrl._deactivate_plot_mouse_modes_for_toolbar()
                 return result
             
             def pan_wrapper(*args, **kwargs):
                 result = self._original_pan(*args, **kwargs)
-                self._toolbar_active = (toolbar.mode != '')
+                mode_text = self._toolbar_mode_text(toolbar)
+                self._toolbar_active = bool(mode_text)
                 # ✅ NEW: Uncheck cursor when pan is activated
-                if toolbar.mode == 'pan/zoom':
-                    self.widget.checkBox_LongCursor.setChecked(False)
+                if mode_text == 'pan/zoom':
+                    main_ctrl = getattr(self.widget, "_main_controller", None)
+                    if main_ctrl is not None and \
+                            hasattr(main_ctrl, "_deactivate_plot_mouse_modes_for_toolbar"):
+                        main_ctrl._deactivate_plot_mouse_modes_for_toolbar()
                 return result
             
             def home_wrapper(*args, **kwargs):
@@ -82,6 +90,16 @@ class MplController(object):
             toolbar.home = home_wrapper
             toolbar.back = back_wrapper
             toolbar.forward = forward_wrapper
+
+    def _toolbar_mode_text(self, toolbar=None):
+        if toolbar is None:
+            toolbar = getattr(self.widget.mpl.canvas, "toolbar", None)
+        if toolbar is None:
+            return ""
+        mode = getattr(toolbar, "mode", "")
+        if not mode:
+            mode = getattr(toolbar, "_active", "")
+        return str(mode or "").strip().lower()
 
     def set_diff_controller(self, diff_ctrl):
         self.diff_ctrl = diff_ctrl
@@ -113,10 +131,10 @@ class MplController(object):
                         pattern.color = 'white'
             self.obj_color = 'white'
 
-    def get_cake_range(self):
+    def get_ccd_range(self):
         if self.model.diff_img_exist():
-            return self.widget.mpl.canvas.ax_cake.get_xlim(),\
-                self.widget.mpl.canvas.ax_cake.get_ylim()
+            return self.widget.mpl.canvas.ax_ccd.get_xlim(),\
+                self.widget.mpl.canvas.ax_ccd.get_ylim()
         else:
             return None, None
 
@@ -145,9 +163,9 @@ class MplController(object):
     def zoom_out_graph(self):
         if not self.model.base_ptn_exist():
             return
-        data_limits = self._get_data_limits()
+        data_limits = self._get_data_limits(y_margin=0.10)
         self.update(limits=data_limits,
-                    cake_ylimits=self._get_cake_y_limits())
+                    ccd_ylimits=self._get_ccd_y_limits())
 
     def _get_data_limits(self, y_margin=0.):
         if self.widget.checkBox_BgSub.isChecked():
@@ -158,11 +176,17 @@ class MplController(object):
         if self.diff_ctrl is not None:
             try:
                 x_plot, y_plot = self.diff_ctrl.get_display_pattern(x_plot, y_plot)
-                __, y_raw = self.diff_ctrl.get_display_pattern(x_raw, y_raw)
             except Exception:
                 pass
-        y_min = float(np.min(y_raw))
-        y_max = float(np.max(y_raw))
+        y_visible = np.asarray(y_plot, dtype=float)
+        finite = y_visible[np.isfinite(y_visible)]
+        if finite.size == 0:
+            raw_visible = np.asarray(y_raw, dtype=float)
+            finite = raw_visible[np.isfinite(raw_visible)]
+        if finite.size == 0:
+            return (x_plot.min(), x_plot.max(), -1.0, 1.0)
+        y_min = float(np.min(finite))
+        y_max = float(np.max(finite))
         y_span = y_max - y_min
         if y_span == 0:
             y_span = max(abs(y_max), 1.0) * 1.0e-6
@@ -170,33 +194,33 @@ class MplController(object):
                 y_min - y_span * y_margin,
                 y_max + y_span * y_margin)
 
-    def _get_cake_y_limits(self):
+    def _get_ccd_y_limits(self):
         if self.model.diff_img_exist():
             try:
-                __, __, chi_cake = self.model.diff_img.get_cake()
+                __, __, chi_ccd = self.model.diff_img.get_ccd()
             except Exception:
-                chi_cake = None
-            if chi_cake is not None and len(chi_cake) > 1:
-                y_min = float(np.min(chi_cake))
-                y_max = float(np.max(chi_cake))
+                chi_ccd = None
+            if chi_ccd is not None and len(chi_ccd) > 1:
+                y_min = float(np.min(chi_ccd))
+                y_max = float(np.max(chi_ccd))
                 if y_min == y_max:
                     pad = max(abs(y_min), 1.0) * 0.5
                     return (y_min - pad, y_max + pad)
                 return (y_min, y_max)
         return None
 
-    def _has_plotable_cake(self):
+    def _has_plotable_ccd(self):
         if not self.model.diff_img_exist():
             return False
         try:
-            intensity_cake, tth_cake, chi_cake = self.model.diff_img.get_cake()
+            intensity_ccd, tth_ccd, chi_ccd = self.model.diff_img.get_ccd()
         except Exception:
             return False
-        if intensity_cake is None or tth_cake is None or chi_cake is None:
+        if intensity_ccd is None or tth_ccd is None or chi_ccd is None:
             return False
-        if np.size(intensity_cake) == 0 or np.size(tth_cake) == 0 or np.size(chi_cake) <= 1:
+        if np.size(intensity_ccd) == 0 or np.size(tth_ccd) == 0 or np.size(chi_ccd) <= 1:
             return False
-        arr = np.asarray(intensity_cake)
+        arr = np.asarray(intensity_ccd)
         return arr.ndim >= 2 and arr.shape[0] > 1
 
     def _get_smoothing_settings(self):
@@ -225,6 +249,20 @@ class MplController(object):
         settings = self._get_smoothing_settings()
         return (settings["despike_kernel"] > 1) or (settings["sg_window"] > 1)
 
+    def _median_filter_1d_edge_safe(self, arr, kernel_size):
+        data = np.asarray(arr, dtype=float).reshape(-1)
+        k = int(kernel_size)
+        if data.size == 0 or k <= 1:
+            return data
+        if k % 2 == 0:
+            k += 1
+        if data.size < k:
+            return np.asarray(data, dtype=float)
+        pad = k // 2
+        padded = np.pad(data, (pad, pad), mode="edge")
+        windows = np.lib.stride_tricks.sliding_window_view(padded, k)
+        return np.asarray(np.median(windows, axis=-1), dtype=float)
+
     def _smooth_xy(self, x, y):
         settings = self._get_smoothing_settings()
         if settings["despike_kernel"] <= 1 and settings["sg_window"] <= 1:
@@ -243,7 +281,7 @@ class MplController(object):
         y_smooth = np.asarray(y_arr, dtype=float)
         despike = int(settings["despike_kernel"])
         if despike > 1 and despike <= n:
-            y_smooth = medfilt(y_smooth, kernel_size=despike)
+            y_smooth = self._median_filter_1d_edge_safe(y_smooth, despike)
         sg_window = int(settings["sg_window"])
         sg_poly = int(settings["sg_polyorder"])
         if sg_window > 1 and sg_window <= n and sg_poly < sg_window:
@@ -262,10 +300,13 @@ class MplController(object):
     def _get_background_fit_display_xy(self):
         if not self.model.base_ptn_exist():
             return None, None
-        x_raw, y_raw = self.model.base_ptn.get_raw()
-        if x_raw is None or y_raw is None:
+        if self.widget.checkBox_BgSub.isChecked():
+            x_src, y_src = self.model.base_ptn.get_bgsub()
+        else:
+            x_src, y_src = self.model.base_ptn.get_raw()
+        if x_src is None or y_src is None:
             return None, None
-        x_fit, y_fit = self._get_smoothed_pattern_xy(x_raw, y_raw)
+        x_fit, y_fit = self._get_smoothed_pattern_xy(x_src, y_src)
         if x_fit is None or y_fit is None:
             return None, None
         x_fit = np.asarray(x_fit, dtype=float).reshape(-1)
@@ -276,24 +317,45 @@ class MplController(object):
         x_fit = x_fit[:n]
         y_fit = y_fit[:n]
         valid = np.isfinite(x_fit) & np.isfinite(y_fit)
-        fit_areas = list(getattr(self.model.base_ptn, "bg_fit_areas", []) or [])
-        if fit_areas:
-            fit_mask = np.zeros(n, dtype=bool)
-            for area in fit_areas:
-                try:
-                    xmin = float(area[0])
-                    xmax = float(area[1])
-                except Exception:
-                    continue
-                if xmax < xmin:
-                    xmin, xmax = xmax, xmin
-                fit_mask |= (x_fit >= xmin) & (x_fit <= xmax)
-            valid &= fit_mask
+        fit_areas = self._get_background_fit_areas()
+        if not fit_areas:
+            return None, None
+        fit_mask = np.zeros(n, dtype=bool)
+        for area in fit_areas:
+            try:
+                xmin = float(area[0])
+                xmax = float(area[1])
+            except Exception:
+                continue
+            if xmax < xmin:
+                xmin, xmax = xmax, xmin
+            fit_mask |= (x_fit >= xmin) & (x_fit <= xmax)
+        valid &= fit_mask
         if np.count_nonzero(valid) == 0:
             return None, None
         return x_fit[valid], y_fit[valid]
 
-    def _smooth_cake_x(self, intensity, x):
+    def _get_background_fit_areas(self):
+        table = getattr(self.widget, "tableWidget_BackgroundConstraints", None)
+        if table is not None:
+            areas = []
+            for row in range(table.rowCount()):
+                item_min = table.item(row, 0)
+                item_max = table.item(row, 1)
+                if item_min is None or item_max is None:
+                    continue
+                try:
+                    xmin = float(item_min.text())
+                    xmax = float(item_max.text())
+                except Exception:
+                    continue
+                if xmax < xmin:
+                    xmin, xmax = xmax, xmin
+                areas.append([xmin, xmax])
+            return areas
+        return list(getattr(self.model.base_ptn, "bg_fit_areas", []) or [])
+
+    def _smooth_ccd_x(self, intensity, x):
         settings = self._get_smoothing_settings()
         if settings["despike_kernel"] <= 1 and settings["sg_window"] <= 1:
             return intensity, x
@@ -317,7 +379,8 @@ class MplController(object):
         despike = int(settings["despike_kernel"])
         if despike > 1 and despike <= n_cols:
             smooth = np.apply_along_axis(
-                lambda row: medfilt(np.nan_to_num(row, nan=0.0), kernel_size=despike),
+                lambda row: self._median_filter_1d_edge_safe(
+                    np.nan_to_num(row, nan=0.0), despike),
                 1,
                 smooth,
             )
@@ -337,44 +400,44 @@ class MplController(object):
             smooth = ma.masked_where(ma.getmaskarray(data_arr), smooth, copy=False)
         return smooth, x_arr
 
-    def _plot_cake(self):
+    def _plot_ccd(self):
         """
-        Controls cake viewing as well as mask
+        Controls ccd viewing as well as mask
         """
         import matplotlib.patches as patches
         import matplotlib.pyplot as plt
         import matplotlib.colors as mcolors
 
-        #print(str(datetime.datetime.now())[:-7], ': Num of tth points = {0:.0f}, azi strips = {1:.0f}'.format(len(tth_cake), len(chi_cake)))
+        #print(str(datetime.datetime.now())[:-7], ': Num of tth points = {0:.0f}, azi strips = {1:.0f}'.format(len(tth_ccd), len(chi_ccd)))
 
-        # make a copy of intensity_cake and make sure it also has mask information 
-        #intensity_cake_plot = ma.masked_values(intensity_cake, 0.)
-        # intensity_cake_plot = ma.masked_equal(intensity_cake, 0.0, copy=False)
-        #intensity_cake_plot = ma.array(intensity_cake, mask=self.model.diff_img.mask)
+        # make a copy of intensity_ccd and make sure it also has mask information 
+        #intensity_ccd_plot = ma.masked_values(intensity_ccd, 0.)
+        # intensity_ccd_plot = ma.masked_equal(intensity_ccd, 0.0, copy=False)
+        #intensity_ccd_plot = ma.array(intensity_ccd, mask=self.model.diff_img.mask)
 
-        # Get cake data
-        intensity_cake, tth_cake, chi_cake = self.model.diff_img.get_cake()
-        int_plot = np.array(intensity_cake, copy=True)
-        if np.ndim(int_plot) < 2 or int_plot.shape[0] <= 1 or np.size(chi_cake) <= 1:
+        # Get ccd data
+        intensity_ccd, tth_ccd, chi_ccd = self.model.diff_img.get_ccd()
+        int_plot = np.array(intensity_ccd, copy=True)
+        if np.ndim(int_plot) < 2 or int_plot.shape[0] <= 1 or np.size(chi_ccd) <= 1:
             return
 
         diff_mode = False
         if self.diff_ctrl is not None:
             try:
-                int_plot, tth_cake, chi_cake = self.diff_ctrl.get_display_cake(
-                    int_plot, tth_cake, chi_cake)
+                int_plot, tth_ccd, chi_ccd = self.diff_ctrl.get_display_ccd(
+                    int_plot, tth_ccd, chi_ccd)
                 diff_mode = self.diff_ctrl.is_diff_mode_active()
             except Exception:
                 diff_mode = False
 
-        int_plot, tth_cake = self._smooth_cake_x(int_plot, tth_cake)
-        if (int_plot is None) or (tth_cake is None) or (chi_cake is None):
+        int_plot, tth_ccd = self._smooth_ccd_x(int_plot, tth_ccd)
+        if (int_plot is None) or (tth_ccd is None) or (chi_ccd is None):
             return
-        if np.size(int_plot) == 0 or np.size(tth_cake) == 0 or np.size(chi_cake) == 0:
+        if np.size(int_plot) == 0 or np.size(tth_ccd) == 0 or np.size(chi_ccd) == 0:
             return
 
         # Apply azimuthal shift after diff subtraction so the same shift is
-        # effectively applied to both current and reference cake images.
+        # effectively applied to both current and reference ccd images.
         # Get image contrast parameters from UI unless diff mode overrides.
         if hasattr(self.widget, "doubleSpinBox_CCDScaleMin"):
             vmin = float(self.widget.doubleSpinBox_CCDScaleMin.value())
@@ -389,7 +452,7 @@ class MplController(object):
             if (max_slider_pos <= min_slider_pos):
                 self.widget.horizontalSlider_VMin.setValue(1)
                 self.widget.horizontalSlider_VMax.setValue(99)
-            prefactor = self.widget.spinBox_MaxCakeScale.value() / \
+            prefactor = self.widget.spinBox_MaxCCDScale.value() / \
                 (10. ** self.widget.horizontalSlider_MaxScaleBars.value())
             climits = np.asarray([
                 self.widget.horizontalSlider_VMin.value(),
@@ -397,7 +460,7 @@ class MplController(object):
                 100. * prefactor
 
         # Check if ApplyMask is on
-        # If so, get mask range from UI and set mask, then process cake for new mask.  Note that if mask from UI is for entire range of data, do not re-integrate.
+        # If so, get mask range from UI and set mask, then process ccd for new mask.  Note that if mask from UI is for entire range of data, do not re-integrate.
 
         """        mask_range = self.model.diff_img.get_mask_range()
         if (self.widget.pushButton_ApplyMask.isChecked() and mask_range != None):
@@ -413,7 +476,7 @@ class MplController(object):
 
         # Colormap + mask handling.
         if diff_mode and (self.diff_ctrl is not None):
-            cfg = self.diff_ctrl.get_cake_render_config(int_plot) or {}
+            cfg = self.diff_ctrl.get_ccd_render_config(int_plot) or {}
             cmap = plt.get_cmap(cfg.get("cmap", "RdBu_r")).copy()
             climits = np.asarray([cfg.get("vmin", -1.0), cfg.get("vmax", 1.0)])
             norm = None
@@ -428,11 +491,11 @@ class MplController(object):
         else:
             # Non-diff mode uses user-selected colormap from Plot > Control.
             cmap_name = "gray_r"
-            if hasattr(self.widget, "comboBox_CakeColormap"):
-                cmap_name = str(self.widget.comboBox_CakeColormap.currentText() or "gray_r")
+            if hasattr(self.widget, "comboBox_CCDColormap"):
+                cmap_name = str(self.widget.comboBox_CCDColormap.currentText() or "gray_r")
             cmap = plt.get_cmap(cmap_name).copy()
             norm = None
-            # 0-values are typically masked pixels in cake data.
+            # 0-values are typically masked pixels in ccd data.
             zero_mask = (int_plot == 0)
             # Opaque pale yellow for masked pixels.
             cmap.set_bad(color=(1.0, 0.97, 0.55, 1.0))
@@ -447,8 +510,8 @@ class MplController(object):
         int_new = ma.masked_where(combined_mask, int_plot, copy=False)
 
 
-        y_min = float(chi_cake.min())
-        y_max = float(chi_cake.max())
+        y_min = float(chi_ccd.min())
+        y_max = float(chi_ccd.max())
         if y_min == y_max:
             pad = max(abs(y_min), 1.0) * 0.5
             y_min -= pad
@@ -456,7 +519,7 @@ class MplController(object):
 
         imshow_kwargs = {
             "origin": "lower",
-            "extent": [tth_cake.min(), tth_cake.max(), y_min, y_max],
+            "extent": [tth_ccd.min(), tth_ccd.max(), y_min, y_max],
             "aspect": "auto",
             "cmap": cmap,
         }
@@ -465,9 +528,9 @@ class MplController(object):
             imshow_kwargs["vmax"] = climits[1]
         else:
             imshow_kwargs["norm"] = norm
-        self.widget.mpl.canvas.ax_cake.imshow(int_new, **imshow_kwargs)
-        if hasattr(self.widget, "cake_hist_widget"):
-            self.widget.cake_hist_widget.set_data(
+        self.widget.mpl.canvas.ax_ccd.imshow(int_new, **imshow_kwargs)
+        if hasattr(self.widget, "ccd_hist_widget"):
+            self.widget.ccd_hist_widget.set_data(
                 int_new, vmin=float(climits[0]), vmax=float(climits[1]))
 
         # get gray scale color map and make sure masked data points are colored red
@@ -483,18 +546,18 @@ class MplController(object):
 
         # plot the data as an image
         """
-        self.widget.mpl.canvas.ax_cake.imshow(
+        self.widget.mpl.canvas.ax_ccd.imshow(
             int_new, origin="lower",
-            extent=[tth_cake.min(), tth_cake.max(),
-                    chi_cake.min(), chi_cake.max()],
+            extent=[tth_ccd.min(), tth_ccd.max(),
+                    chi_ccd.min(), chi_ccd.max()],
             aspect="auto", cmap=cmap, clim=climits)  # gray_r
         """
-        #print(str(datetime.datetime.now())[:-7], ': Cake intensity min, max = ', climits)
+        #print(str(datetime.datetime.now())[:-7], ': CCD intensity min, max = ', climits)
 
         # overlay azimuthal sections information
         tth_list, azi_list, note_list = self._read_azilist()
-        tth_min = tth_cake.min()
-        tth_max = tth_cake.max()
+        tth_min = tth_ccd.min()
+        tth_max = tth_ccd.max()
         if azi_list is not None:
             for tth, azi, note in zip(tth_list, azi_list, note_list):
                 rect = patches.Rectangle(
@@ -503,10 +566,10 @@ class MplController(object):
                 rect1 = patches.Rectangle(
                     (tth[0], azi[0]), (tth[1] - tth[0]), (azi[1] - azi[0]),
                     linewidth=1, edgecolor='b', facecolor='None')
-                self.widget.mpl.canvas.ax_cake.add_patch(rect)
-                self.widget.mpl.canvas.ax_cake.add_patch(rect1)
-                if self.widget.checkBox_ShowCakeLabels.isChecked():
-                    self.widget.mpl.canvas.ax_cake.text(
+                self.widget.mpl.canvas.ax_ccd.add_patch(rect)
+                self.widget.mpl.canvas.ax_ccd.add_patch(rect1)
+                if self.widget.checkBox_ShowCCDLabels.isChecked():
+                    self.widget.mpl.canvas.ax_ccd.text(
                         tth[1], azi[1], note, color=self.obj_color)
         rows = self.widget.tableWidget_DiffImgAzi.selectionModel().\
             selectedRows()
@@ -520,7 +583,7 @@ class MplController(object):
                     (tth_min, azi_min), (tth_max - tth_min),
                     (azi_max - azi_min),
                     linewidth=0, facecolor='r', alpha=0.2)
-                self.widget.mpl.canvas.ax_cake.add_patch(rect)
+                self.widget.mpl.canvas.ax_ccd.add_patch(rect)
         if hasattr(self.widget, "spinBox_CCDRowMin") and hasattr(self.widget, "spinBox_CCDRowMax"):
             row_min = float(self.widget.spinBox_CCDRowMin.value())
             row_max = float(self.widget.spinBox_CCDRowMax.value())
@@ -533,14 +596,14 @@ class MplController(object):
                     edgecolor='#00e676',
                     facecolor='#00e676',
                     alpha=0.12)
-                self.widget.mpl.canvas.ax_cake.add_patch(rect)
+                self.widget.mpl.canvas.ax_ccd.add_patch(rect)
 
     def _plot_jcpds(self, axisrange):
         import matplotlib.transforms as transforms
 
         # t_start = time.time()
         if (not self.widget.checkBox_JCPDSinPattern.isChecked()) and \
-                (not self.widget.checkBox_JCPDSinCake.isChecked()):
+                (not self.widget.checkBox_JCPDSinCCD.isChecked()):
             return
         selected_phases = []
         for phase in self.model.jcpds_lst:
@@ -550,7 +613,7 @@ class MplController(object):
             return
         n_displayed_jcpds = len(selected_phases)
         # axisrange = self.widget.mpl.canvas.ax_pattern.axis()
-        cakerange = self.widget.mpl.canvas.ax_cake.axis()
+        ccdrange = self.widget.mpl.canvas.ax_ccd.axis()
         bar_scale = 1. / 100. * axisrange[3] * \
             self.widget.horizontalSlider_JCPDSBarScale.value() / 100.
         bar_pos = self.widget.horizontalSlider_JCPDSBarPosition.value() / 100.
@@ -611,26 +674,26 @@ class MplController(object):
                             alpha=self.widget.doubleSpinBox_JCPDS_ptn_Alpha.value())
                 # phase.name, phase.v.item()))
             if self.model.diff_img_exist() and \
-                    self.widget.checkBox_JCPDSinCake.isChecked():
-                self.widget.mpl.canvas.ax_cake.vlines(
-                    tth, np.ones_like(tth) * cakerange[2],
-                    np.ones_like(tth) * cakerange[3], colors=phase.color,
+                    self.widget.checkBox_JCPDSinCCD.isChecked():
+                self.widget.mpl.canvas.ax_ccd.vlines(
+                    tth, np.ones_like(tth) * ccdrange[2],
+                    np.ones_like(tth) * ccdrange[3], colors=phase.color,
                     lw=float(
-                        self.widget.comboBox_CakeJCPDSBarThickness.currentText()),
-                    alpha=self.widget.doubleSpinBox_JCPDS_cake_Alpha.value())
-                if self.widget.checkBox_ShowMillerIndices_Cake.isChecked():
+                        self.widget.comboBox_CCDJCPDSBarThickness.currentText()),
+                    alpha=self.widget.doubleSpinBox_JCPDS_ccd_Alpha.value())
+                if self.widget.checkBox_ShowMillerIndices_CCD.isChecked():
                     hkl_list = phase.get_hkl_in_text()
                     trans = transforms.blended_transform_factory(
-                        self.widget.mpl.canvas.ax_cake.transData,
-                        self.widget.mpl.canvas.ax_cake.transAxes)
+                        self.widget.mpl.canvas.ax_ccd.transData,
+                        self.widget.mpl.canvas.ax_ccd.transAxes)
                     for j, hkl in enumerate(hkl_list):
-                        self.widget.mpl.canvas.ax_cake.text(
+                        self.widget.mpl.canvas.ax_ccd.text(
                             tth[j], 0.99, hkl, color=phase.color,
                             rotation=90, verticalalignment='top',
                             transform=trans, horizontalalignment='right',
                             fontsize=int(
                                 self.widget.comboBox_HKLFontSize.currentText()),
-                            alpha=self.widget.doubleSpinBox_JCPDS_cake_Alpha.value())
+                            alpha=self.widget.doubleSpinBox_JCPDS_ccd_Alpha.value())
         if self.widget.checkBox_JCPDSinPattern.isChecked():
             legend_fontsize = 14
             if hasattr(self.widget, "comboBox_LegendFontSize"):
@@ -771,9 +834,11 @@ class MplController(object):
             self.widget.mpl.canvas.ax_pattern.axhline(
                 0.0, ls='--', c='tab:red', lw=0.8)
             return
+        x_fit, y_fit = self._get_background_fit_display_xy()
+        fit_areas = self._get_background_fit_areas()
         if (not self.widget.checkBox_BgSub.isChecked()) and \
                 hasattr(self.widget, "checkBox_ShowBg") and \
-                self.widget.checkBox_ShowBg.isChecked():
+                self.widget.checkBox_ShowBg.isChecked() and fit_areas:
             x_bg, y_bg = self.model.base_ptn.get_background()
             x_bg, y_bg = self._get_smoothed_pattern_xy(x_bg, y_bg)
             self.widget.mpl.canvas.ax_pattern.plot(
@@ -781,18 +846,17 @@ class MplController(object):
                 lw=float(
                     self.widget.comboBox_BkgnLineThickness.
                     currentText()))
-            x_fit, y_fit = self._get_background_fit_display_xy()
-            if x_fit is not None and y_fit is not None:
-                self.widget.mpl.canvas.ax_pattern.plot(
-                    x_fit, y_fit,
-                    c='#facc15',
-                    marker='o',
-                    linestyle='None',
-                    ms=5,
-                    mfc='#facc15',
-                    mec='#ca8a04',
-                    mew=0.8,
-                    alpha=0.95)
+        if x_fit is not None and y_fit is not None:
+            self.widget.mpl.canvas.ax_pattern.plot(
+                x_fit, y_fit,
+                c='#facc15',
+                marker='o',
+                linestyle='None',
+                ms=5,
+                mfc='#facc15',
+                mec='#ca8a04',
+                mew=0.8,
+                alpha=0.95)
 
     def _plot_peakfit(self):
         if not self.model.current_section_exist():
@@ -900,28 +964,14 @@ class MplController(object):
             i += 1
 
     def _plot_background_fit_areas(self):
-        table = getattr(self.widget, "tableWidget_BackgroundConstraints", None)
-        if table is None:
-            return
-        for row in range(table.rowCount()):
-            item_min = table.item(row, 0)
-            item_max = table.item(row, 1)
-            if item_min is None or item_max is None:
-                continue
-            try:
-                xmin = float(item_min.text())
-                xmax = float(item_max.text())
-            except Exception:
-                continue
-            if xmax < xmin:
-                xmin, xmax = xmax, xmin
+        for xmin, xmax in self._get_background_fit_areas():
             self.widget.mpl.canvas.ax_pattern.axvspan(
                 xmin, xmax,
                 ymin=0.0, ymax=1.0,
-                facecolor="#00c853",
-                edgecolor="#00c853",
-                alpha=0.10,
-                linewidth=1.0,
+                facecolor="#facc15",
+                edgecolor="#facc15",
+                alpha=0.18,
+                linewidth=1.2,
             )
 
     def _fits_tab_active(self):
@@ -937,12 +987,12 @@ class MplController(object):
         # Backward-compatible fallback.
         return self.widget.tabWidget.currentIndex() in (4, 5)
 
-    def update(self, limits=None, gsas_style=False, cake_ylimits=None):
+    def update(self, limits=None, gsas_style=False, ccd_ylimits=None):
         if limits is not None:
             limits = tuple(limits)
-        if cake_ylimits is not None:
-            cake_ylimits = tuple(cake_ylimits)
-        self._pending_update_args = (limits, bool(gsas_style), cake_ylimits)
+        if ccd_ylimits is not None:
+            ccd_ylimits = tuple(ccd_ylimits)
+        self._pending_update_args = (limits, bool(gsas_style), ccd_ylimits)
         self._update_timer.start(self._update_delay_ms)
 
     def _flush_update_request(self):
@@ -951,13 +1001,13 @@ class MplController(object):
         if self._is_drawing or self._toolbar_active:
             self._update_timer.start(self._update_delay_ms)
             return
-        limits, gsas_style, cake_ylimits = self._pending_update_args
+        limits, gsas_style, ccd_ylimits = self._pending_update_args
         self._pending_update_args = None
-        self._update_impl(limits=limits, gsas_style=gsas_style, cake_ylimits=cake_ylimits)
+        self._update_impl(limits=limits, gsas_style=gsas_style, ccd_ylimits=ccd_ylimits)
         if self._pending_update_args is not None:
             self._update_timer.start(self._update_delay_ms)
 
-    def _update_impl(self, limits=None, gsas_style=False, cake_ylimits=None):
+    def _update_impl(self, limits=None, gsas_style=False, ccd_ylimits=None):
         """Updates the graph"""
         # ✅ Block updates during drawing OR toolbar interaction
         if self._is_drawing or self._toolbar_active:
@@ -977,16 +1027,16 @@ class MplController(object):
         try:
             if limits is None:
                 limits = self.widget.mpl.canvas.ax_pattern.axis()
-            if cake_ylimits is None:
-                cake_ylimits = self._get_cake_y_limits()
-                if cake_ylimits is None and hasattr(self.widget.mpl.canvas, 'ax_cake'):
-                    c_limits = self.widget.mpl.canvas.ax_cake.axis()
-                    cake_ylimits = c_limits[2:4]
+            if ccd_ylimits is None:
+                ccd_ylimits = self._get_ccd_y_limits()
+                if ccd_ylimits is None and hasattr(self.widget.mpl.canvas, 'ax_ccd'):
+                    c_limits = self.widget.mpl.canvas.ax_ccd.axis()
+                    ccd_ylimits = c_limits[2:4]
             
-            if self._has_plotable_cake():
-                new_height = self.widget.horizontalSlider_CakeAxisSize.value()
+            if self._has_plotable_ccd():
+                new_height = self.widget.horizontalSlider_CCDAxisSize.value()
                 self.widget.mpl.canvas.resize_axes(new_height)
-                self._plot_cake()
+                self._plot_ccd()
             else:
                 self.widget.mpl.canvas.resize_axes(1)
             
@@ -1026,6 +1076,7 @@ class MplController(object):
                 self.widget.mpl.canvas.fig.suptitle(
                     title, color=self.obj_color, fontsize=title_font_size)
                 
+                self._plot_background_fit_areas()
                 self._plot_diffpattern(gsas_style)
                 
                 if self.model.waterfall_exist():
@@ -1039,15 +1090,16 @@ class MplController(object):
             
             self.widget.mpl.canvas.ax_pattern.set_xlim(limits[0], limits[1])
             
-            if not self.widget.checkBox_AutoY.isChecked():
+            if (not self.widget.checkBox_AutoY.isChecked()) or \
+                    (not self._fits_tab_active()):
                 self.widget.mpl.canvas.ax_pattern.set_ylim(limits[2], limits[3])
             else:
                 self._apply_peakfit_autoy(
                     bgsub=self.widget.checkBox_BgSub.isChecked())
             
-            # ✅ Check if ax_cake exists before setting ylim
-            if hasattr(self.widget.mpl.canvas, 'ax_cake') and (cake_ylimits is not None):
-                self.widget.mpl.canvas.ax_cake.set_ylim(cake_ylimits)
+            # ✅ Check if ax_ccd exists before setting ylim
+            if hasattr(self.widget.mpl.canvas, 'ax_ccd') and (ccd_ylimits is not None):
+                self.widget.mpl.canvas.ax_ccd.set_ylim(ccd_ylimits)
             
             if self.model.jcpds_exist():
                 self._plot_jcpds(limits)
@@ -1068,11 +1120,19 @@ class MplController(object):
                         self.widget.comboBox_PnTFontSize.currentText()))
             
             if self._is_spe_mode():
-                self.widget.mpl.canvas.ax_pattern.set_xlabel(r"Raman Shift (cm$^{-1}$)")
-                self.widget.mpl.canvas.ax_pattern.format_coord = \
-                    lambda x, y: "\n Shift={0:.3f} cm-1, I={1:.4e}".format(x, y)
-                if hasattr(self.widget.mpl.canvas, 'ax_cake'):
-                    self.widget.mpl.canvas.ax_cake.set_ylabel("CCD Pixel")
+                use_wavenumber = bool(
+                    getattr(self.widget, "checkBox_SpectrumWavenumber", None) and
+                    self.widget.checkBox_SpectrumWavenumber.isChecked())
+                if use_wavenumber:
+                    self.widget.mpl.canvas.ax_pattern.set_xlabel(r"Raman Shift (cm$^{-1}$)")
+                    self.widget.mpl.canvas.ax_pattern.format_coord = \
+                        lambda x, y: "\n Shift={0:.3f} cm-1, I={1:.4e}".format(x, y)
+                else:
+                    self.widget.mpl.canvas.ax_pattern.set_xlabel("Wavelength (nm)")
+                    self.widget.mpl.canvas.ax_pattern.format_coord = \
+                        lambda x, y: "\n Wavelength={0:.3f} nm, I={1:.4e}".format(x, y)
+                if hasattr(self.widget.mpl.canvas, 'ax_ccd'):
+                    self.widget.mpl.canvas.ax_ccd.set_ylabel("CCD Pixel")
             else:
                 xlabel = "Two Theta (degrees), {:6.4f} \u212B".\
                     format(self.widget.doubleSpinBox_SetWavelength.value())
@@ -1084,26 +1144,26 @@ class MplController(object):
                         self.widget.doubleSpinBox_SetWavelength.value()
                         / 2. / np.sin(np.radians(x / 2.)))
             
-            # ✅ Only set cake format_coord if ax_cake exists
-            if hasattr(self.widget.mpl.canvas, 'ax_cake'):
+            # ✅ Only set ccd format_coord if ax_ccd exists
+            if hasattr(self.widget.mpl.canvas, 'ax_ccd'):
                 """
-                self.widget.mpl.canvas.ax_cake.format_coord = \
+                self.widget.mpl.canvas.ax_ccd.format_coord = \
                     lambda x, y: \
                     "\n 2\u03B8={0:.3f}\u00B0, azi={1:.1f}, d-sp={2:.4f}\u212B".\
                     format(x, y,  
                         self.widget.doubleSpinBox_SetWavelength.value()
                         / 2. / np.sin(np.radians(x / 2.)))
                 """
-                self.widget.mpl.canvas.ax_cake.format_coord = self._format_coord_x_y_z_dsp
+                self.widget.mpl.canvas.ax_ccd.format_coord = self._format_coord_x_y_z_dsp
             
             # ✅ MOVED: Set up cursor BEFORE drawing (inside try block)
             if self.widget.checkBox_LongCursor.isChecked():
                 # Determine which axes to use
-                if hasattr(self.widget.mpl.canvas, 'ax_cake') and \
+                if hasattr(self.widget.mpl.canvas, 'ax_ccd') and \
                    self.model.diff_img_exist():
                     # Use both axes
                     axes_list = (self.widget.mpl.canvas.ax_pattern,
-                                self.widget.mpl.canvas.ax_cake)
+                                self.widget.mpl.canvas.ax_ccd)
                 else:
                     # Use only pattern axis
                     axes_list = (self.widget.mpl.canvas.ax_pattern,)
@@ -1155,9 +1215,17 @@ class MplController(object):
         :param y: azimuthal angle
         """
         if self._is_spe_mode():
-            ax = self.widget.mpl.canvas.ax_cake
+            ax = self.widget.mpl.canvas.ax_ccd
+            use_wavenumber = bool(
+                getattr(self.widget, "checkBox_SpectrumWavenumber", None) and
+                self.widget.checkBox_SpectrumWavenumber.isChecked())
+            x_label = "Shift"
+            x_unit = "cm-1"
+            if not use_wavenumber:
+                x_label = "Wavelength"
+                x_unit = "nm"
             if not ax.images:
-                return "Shift={:.3f} cm-1, pixel={:.1f}, I=NA".format(x, y)
+                return "{}={:.3f} {}, pixel={:.1f}, I=NA".format(x_label, x, x_unit, y)
             img = ax.images[0]
             data = img.get_array()
             xmin, xmax, ymin, ymax = img.get_extent()
@@ -1173,8 +1241,8 @@ class MplController(object):
                 z_text = "{:.0f}".format(float(z_val))
             except Exception:
                 z_text = "NA"
-            return "Shift={:.3f} cm-1, pixel={:.1f}, I={}".format(x, y, z_text)
-        ax = self.widget.mpl.canvas.ax_cake
+            return "{}={:.3f} {}, pixel={:.1f}, I={}".format(x_label, x, x_unit, y, z_text)
+        ax = self.widget.mpl.canvas.ax_ccd
 
         # compute d-spacing from x (2-theta)
         try:

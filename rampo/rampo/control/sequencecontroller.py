@@ -88,6 +88,15 @@ class SequenceController(object):
         if hasattr(self.widget, "label_SeqLoaded"):
             self.widget.label_SeqLoaded.setText(f"Loaded: {len(self._chi_files)}")
 
+    def _current_file_index_in_selection(self):
+        if not self._chi_files or not self.model.base_ptn_exist():
+            return None
+        current = os.path.normcase(os.path.abspath(self.model.base_ptn.fname))
+        for idx, path in enumerate(self._chi_files):
+            if os.path.normcase(os.path.abspath(path)) == current:
+                return idx
+        return None
+
     def _load_chi_files(self):
         files = open_spectrum_file_dialog(
             self.widget,
@@ -111,7 +120,7 @@ class SequenceController(object):
 
         self._set_loaded_count()
         self._set_status(f"Loaded {len(self._chi_files)} spectra.")
-        self._preview_first_file()
+        self._preview_current_or_first_file()
         self._set_default_1d_full_range_roi()
         if self._roi_1d is not None:
             self._compute_sequence()
@@ -141,8 +150,12 @@ class SequenceController(object):
             return list(range(1, len(files) + 1))
         return out
 
-    def _preview_first_file(self):
+    def _preview_current_or_first_file(self):
         if not self._chi_files:
+            return
+        current_idx = self._current_file_index_in_selection()
+        if current_idx is not None:
+            self._load_file_to_main_plot(current_idx)
             return
         self._load_file_to_main_plot(0)
 
@@ -151,9 +164,28 @@ class SequenceController(object):
             return
         if (idx < 0) or (idx >= len(self._chi_files)):
             return
+        main_ctrl = getattr(self.widget, "_main_controller", None)
+        bg_state = None
+        should_restore_bg = (
+            main_ctrl is not None and
+            hasattr(main_ctrl, "_should_carry_nav_category") and
+            bool(main_ctrl._should_carry_nav_category("background", "checkBox_CarryNavBackground"))
+        )
+        if should_restore_bg and hasattr(main_ctrl, "capture_background_ui_state"):
+            try:
+                bg_state = main_ctrl.capture_background_ui_state()
+            except Exception:
+                bg_state = None
         try:
             self.base_spectrum_ctrl._load_a_new_pattern(self._chi_files[idx])
-            if self.plot_ctrl is not None:
+            if should_restore_bg and hasattr(main_ctrl, "restore_background_ui_state"):
+                try:
+                    main_ctrl.restore_background_ui_state(bg_state, recompute=True)
+                except Exception:
+                    pass
+            if main_ctrl is not None and hasattr(main_ctrl, "_refresh_after_navigation"):
+                main_ctrl._refresh_after_navigation()
+            elif self.plot_ctrl is not None:
                 self.plot_ctrl.update()
             self._schedule_overlay_refresh()
         except Exception as exc:
@@ -163,6 +195,8 @@ class SequenceController(object):
         self.refresh_roi_overlays()
         QtCore.QTimer.singleShot(0, self.refresh_roi_overlays)
         QtCore.QTimer.singleShot(80, self.refresh_roi_overlays)
+        QtCore.QTimer.singleShot(160, self.refresh_roi_overlays)
+        QtCore.QTimer.singleShot(320, self.refresh_roi_overlays)
 
     def _set_default_1d_full_range_roi(self):
         if not self._chi_files:
@@ -259,13 +293,8 @@ class SequenceController(object):
             x_raw = np.asarray(x_raw, dtype=float)
             if x_raw.size == 0:
                 return x_raw, np.asarray([], dtype=float)
-            roi_min = float(self.widget.doubleSpinBox_Background_ROI_min.value())
-            roi_max = float(self.widget.doubleSpinBox_Background_ROI_max.value())
-            roi_min = max(float(np.nanmin(x_raw)), roi_min)
-            roi_max = min(float(np.nanmax(x_raw)), roi_max)
-            if roi_max <= roi_min:
-                roi_min = float(np.nanmin(x_raw))
-                roi_max = float(np.nanmax(x_raw))
+            roi_min = float(np.nanmin(x_raw))
+            roi_max = float(np.nanmax(x_raw))
             y_fit = np.asarray(y_raw, dtype=float)
             if (self.plot_ctrl is not None) and \
                     bool(getattr(self.plot_ctrl, "_smoothing_active", lambda: False)()):
@@ -277,7 +306,7 @@ class SequenceController(object):
                 fit_areas=fit_areas,
                 y_source=y_fit,
             )
-            x, y = spectrum.get_bgsub()
+            x, y = spectrum.get_bgsub_processed()
         else:
             x, y = spectrum.get_raw()
             x = np.asarray(x, dtype=float)

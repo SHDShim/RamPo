@@ -32,7 +32,7 @@ class SessionController(object):
             "pressure": False,
             "temperature": False,
             "spectrum_smoothing": False,
-            "cake_z_scale": False,
+            "ccd_z_scale": False,
             "ccd_roi": False,
             "background": False,
             "waterfall_list": False,
@@ -314,10 +314,10 @@ class SessionController(object):
             ) if self.model.base_ptn_exist() else None,
             "smooth_file": "smooth.chi",
         }
-        cake_hist = {}
-        if hasattr(self.widget, "cake_hist_widget"):
-            hist = self.widget.cake_hist_widget
-            cake_hist = {
+        ccd_hist = {}
+        if hasattr(self.widget, "ccd_hist_widget"):
+            hist = self.widget.ccd_hist_widget
+            ccd_hist = {
                 "log_y": bool(hist.check_log.isChecked()),
             }
         return {
@@ -327,20 +327,18 @@ class SessionController(object):
                 "jcpds_step": self.widget.doubleSpinBox_JCPDSStep.value(),
             },
             "background": {
-                "roi_min": float(self.widget.doubleSpinBox_Background_ROI_min.value()),
-                "roi_max": float(self.widget.doubleSpinBox_Background_ROI_max.value()),
                 "poly_order": int(self.widget.spinBox_BGParam1.value()),
                 "areas": self._collect_background_areas(),
             },
             "spectrum": smoothing,
-            "cake": {
+            "ccd": {
                 "vmin": float(self.widget.doubleSpinBox_CCDScaleMin.value())
                 if hasattr(self.widget, "doubleSpinBox_CCDScaleMin") else 0.0,
                 "vmax": float(self.widget.doubleSpinBox_CCDScaleMax.value())
                 if hasattr(self.widget, "doubleSpinBox_CCDScaleMax") else 1.0,
                 "mask_min": self.widget.spinBox_MaskMin.value(),
                 "mask_max": self.widget.spinBox_MaskMax.value(),
-                "hist": cake_hist,
+                "hist": ccd_hist,
             },
             "ccd_roi": {
                 "row_min": int(self.widget.spinBox_CCDRowMin.value())
@@ -378,10 +376,6 @@ class SessionController(object):
                 self.widget.doubleSpinBox_JCPDSStep.setValue(float(pt["jcpds_step"]))
         bg = (ui_state or {}).get("background", {})
         if bg != {}:
-            if "roi_min" in bg:
-                self.widget.doubleSpinBox_Background_ROI_min.setValue(float(bg["roi_min"]))
-            if "roi_max" in bg:
-                self.widget.doubleSpinBox_Background_ROI_max.setValue(float(bg["roi_max"]))
             self.widget.spinBox_BGParam1.setValue(int(bg.get("poly_order", 3)))
             self._apply_background_areas(bg.get("areas", []))
         spectrum = (ui_state or {}).get("spectrum", {})
@@ -395,20 +389,20 @@ class SessionController(object):
             if hasattr(self.widget, "spinBox_SpectrumSGPoly"):
                 self.widget.spinBox_SpectrumSGPoly.setValue(
                     int(spectrum.get("sg_polyorder", 3)))
-        cake = (ui_state or {}).get("cake", {})
-        if cake != {}:
-            if "vmin" in cake and hasattr(self.widget, "doubleSpinBox_CCDScaleMin"):
-                self.widget.doubleSpinBox_CCDScaleMin.setValue(float(cake["vmin"]))
-            if "vmax" in cake and hasattr(self.widget, "doubleSpinBox_CCDScaleMax"):
-                self.widget.doubleSpinBox_CCDScaleMax.setValue(float(cake["vmax"]))
-            if "mask_min" in cake:
-                self.widget.spinBox_MaskMin.setValue(int(cake["mask_min"]))
-            if "mask_max" in cake:
-                self.widget.spinBox_MaskMax.setValue(int(cake["mask_max"]))
-            hist = cake.get("hist", {})
-            if hasattr(self.widget, "cake_hist_widget") and hist != {}:
+        ccd = (ui_state or {}).get("ccd", {})
+        if ccd != {}:
+            if "vmin" in ccd and hasattr(self.widget, "doubleSpinBox_CCDScaleMin"):
+                self.widget.doubleSpinBox_CCDScaleMin.setValue(float(ccd["vmin"]))
+            if "vmax" in ccd and hasattr(self.widget, "doubleSpinBox_CCDScaleMax"):
+                self.widget.doubleSpinBox_CCDScaleMax.setValue(float(ccd["vmax"]))
+            if "mask_min" in ccd:
+                self.widget.spinBox_MaskMin.setValue(int(ccd["mask_min"]))
+            if "mask_max" in ccd:
+                self.widget.spinBox_MaskMax.setValue(int(ccd["mask_max"]))
+            hist = ccd.get("hist", {})
+            if hasattr(self.widget, "ccd_hist_widget") and hist != {}:
                 if "log_y" in hist:
-                    self.widget.cake_hist_widget.check_log.setChecked(bool(hist["log_y"]))
+                    self.widget.ccd_hist_widget.check_log.setChecked(bool(hist["log_y"]))
         ccd_roi = (ui_state or {}).get("ccd_roi", {})
         raw_image = getattr(getattr(self.model, "base_ptn", None), "raw_image", None)
         has_multirow_ccd = (
@@ -438,13 +432,6 @@ class SessionController(object):
         if not self.model.base_ptn_exist():
             return
         base_ptn = self.model.base_ptn
-        roi = getattr(base_ptn, "roi", None)
-        if roi is not None and len(roi) >= 2:
-            try:
-                self.widget.doubleSpinBox_Background_ROI_min.setValue(float(roi[0]))
-                self.widget.doubleSpinBox_Background_ROI_max.setValue(float(roi[1]))
-            except Exception:
-                pass
         try:
             params = getattr(base_ptn, "params_chbg", None) or [3]
             self.widget.spinBox_BGParam1.setValue(int(params[0]))
@@ -471,7 +458,7 @@ class SessionController(object):
             mode = str(diff["scale_mode"])
             if mode in ("Symmetric (0 centered)", "Asymmetric (0 centered)", "0 centered"):
                 mode = "0 Centered"
-            elif mode in ("Cake-like free range", "Positive only (0 as min)", "Negative only (0 as max)"):
+            elif mode in ("CCD-like free range", "Positive only (0 as min)", "Negative only (0 as max)"):
                 mode = "Free range"
             if self.widget.comboBox_DiffScaleMode.findText(mode) >= 0:
                 self.widget.comboBox_DiffScaleMode.setCurrentText(mode)
@@ -533,8 +520,6 @@ class SessionController(object):
             "doubleSpinBox_SetWavelength",
             "doubleSpinBox_Pressure",
             "doubleSpinBox_Temperature",
-            "doubleSpinBox_Background_ROI_min",
-            "doubleSpinBox_Background_ROI_max",
             "spinBox_BGParam1",
             "doubleSpinBox_CCDScaleMin",
             "doubleSpinBox_CCDScaleMax",
@@ -551,8 +536,8 @@ class SessionController(object):
         for name in names:
             if hasattr(self.widget, name):
                 widgets.append(getattr(self.widget, name))
-        if hasattr(self.widget, "cake_hist_widget"):
-            hist = self.widget.cake_hist_widget
+        if hasattr(self.widget, "ccd_hist_widget"):
+            hist = self.widget.ccd_hist_widget
             for name in ("check_log",):
                 if hasattr(hist, name):
                     widgets.append(getattr(hist, name))
@@ -723,7 +708,7 @@ class SessionController(object):
                 "pressure": False,
                 "temperature": False,
                 "spectrum_smoothing": False,
-                "cake_z_scale": False,
+                "ccd_z_scale": False,
                 "ccd_roi": False,
                 "background": False,
                 "waterfall_list": False,
@@ -740,7 +725,7 @@ class SessionController(object):
                 "pressure": False,
                 "temperature": False,
                 "spectrum_smoothing": False,
-                "cake_z_scale": False,
+                "ccd_z_scale": False,
                 "ccd_roi": False,
                 "background": False,
                 "waterfall_list": False,
@@ -753,7 +738,7 @@ class SessionController(object):
             "pressure": False,
             "temperature": False,
             "spectrum_smoothing": False,
-            "cake_z_scale": False,
+            "ccd_z_scale": False,
             "ccd_roi": False,
             "background": False,
             "waterfall_list": False,
@@ -800,16 +785,16 @@ class SessionController(object):
         if hasattr(self.widget, "tabWidget_3Page1") and hasattr(self.widget, "tabWidget_3"):
             self.widget.tabWidget_3.setCurrentWidget(self.widget.tabWidget_3Page1)
 
-    def _load_cake_format_file(self):
+    def _load_ccd_format_file(self):
         # get filename
         temp_dir = get_temp_dir(self.model.get_base_ptn_filename())
         """
         filen = QtWidgets.QFileDialog.getOpenFileName(
-            self.widget, "Open a cake format File", temp_dir,
+            self.widget, "Open a ccd format File", temp_dir,
             # self.model.chi_path,
-            "Data files (*.cakeformat)")[0]
+            "Data files (*.ccdformat)")[0]
         """
-        ext = "cakeformat"
+        ext = "ccdformat"
         #filen_t = self.model.make_filename(ext)
         filen = make_filename(self.model.base_ptn.fname, ext,
                               temp_dir=temp_dir)
@@ -826,14 +811,14 @@ class SessionController(object):
             if "vmax" in temp_values and hasattr(self.widget, "doubleSpinBox_CCDScaleMax"):
                 self.widget.doubleSpinBox_CCDScaleMax.setValue(float(temp_values["vmax"]))
 
-    def _save_cake_format_file(self):
+    def _save_ccd_format_file(self):
         # make filename
         temp_dir = get_temp_dir(self.model.get_base_ptn_filename())
-        ext = "cakeformat"
+        ext = "ccdformat"
         #filen_t = self.model.make_filename(ext)
         filen = make_filename(self.model.base_ptn.fname, ext,
                               temp_dir=temp_dir)
-        # save cake related Values
+        # save ccd related Values
         names = ['vmin', 'vmax']
         values = [
             self.widget.doubleSpinBox_CCDScaleMin.value()
@@ -883,7 +868,7 @@ class SessionController(object):
                 self.widget.pushButton_AddBasePtn.setChecked(True)
             else:
                 self.widget.pushButton_AddBasePtn.setChecked(False)
-            self._load_cake_format_file()
+            self._load_ccd_format_file()
             self.plot_ctrl.zoom_out_graph()
             self.update_inputs()
         else:
@@ -923,13 +908,13 @@ class SessionController(object):
         diff_img = getattr(self.model, "diff_img", None)
         if (diff_img is not None) and (getattr(diff_img, "img", None) is not None):
             self.ccdprocess_ctrl.cook()
-            self.model.diff_img.write_temp_cakefiles(
+            self.model.diff_img.write_temp_ccdfiles(
                 temp_dir=get_temp_dir(self.model.get_base_ptn_filename()))
         elif (diff_img is not None) and \
-                (getattr(diff_img, "tth_cake", None) is not None) and \
-                (getattr(diff_img, "chi_cake", None) is not None) and \
-                (getattr(diff_img, "intensity_cake", None) is not None):
-            self.model.diff_img.write_temp_cakefiles(
+                (getattr(diff_img, "tth_ccd", None) is not None) and \
+                (getattr(diff_img, "chi_ccd", None) is not None) and \
+                (getattr(diff_img, "intensity_ccd", None) is not None):
+            self.model.diff_img.write_temp_ccdfiles(
                 temp_dir=get_temp_dir(self.model.get_base_ptn_filename()))
         self._commit_inputs_before_save()
         self._write_smoothed_spectrum_file()
@@ -949,7 +934,7 @@ class SessionController(object):
         print(str(datetime.datetime.now())[:-7],
               ": Save session:", result.manifest_path)
         self.refresh_backup_table()
-        self._save_cake_format_file()
+        self._save_ccd_format_file()
         try:
             env = os.environ['CONDA_DEFAULT_ENV']
         except Exception:
@@ -962,7 +947,24 @@ class SessionController(object):
             f.write("Environment: " + env + '\n')
         self.widget.textEdit_SessionFileName.setText(str(result.manifest_path))
         self.widget.tableWidget_PkFtSections.setStyleSheet(
-            "Background-color:None;color:rgb(0,0,0);")
+            "QTableWidget {"
+            "background-color: rgb(229, 231, 235);"
+            "alternate-background-color: rgb(243, 244, 246);"
+            "color: rgb(17, 24, 39);"
+            "gridline-color: rgb(156, 163, 175);"
+            "selection-background-color: rgb(147, 197, 253);"
+            "selection-color: rgb(17, 24, 39);"
+            "}"
+            "QTableWidget::item {"
+            "background-color: rgb(229, 231, 235);"
+            "color: rgb(17, 24, 39);"
+            "}"
+            "QHeaderView::section {"
+            "background-color: rgb(107, 114, 128);"
+            "color: rgb(249, 250, 251);"
+            "border: 1px solid rgb(75, 85, 99);"
+            "padding: 2px 4px;"
+            "}")
 
     def _write_smoothed_spectrum_file(self):
         if not self.model.base_ptn_exist():
@@ -1017,10 +1019,6 @@ class SessionController(object):
         '''
         self.widget.spinBox_BGParam1.setValue(
             self.model.base_ptn.params_chbg[0])
-        self.widget.doubleSpinBox_Background_ROI_min.setValue(
-            self.model.base_ptn.x_bg[0])
-        self.widget.doubleSpinBox_Background_ROI_max.setValue(
-            self.model.base_ptn.x_bg[-1])
 
     def _collect_background_areas(self):
         areas = []
@@ -1043,6 +1041,10 @@ class SessionController(object):
         return areas
 
     def _apply_background_areas(self, areas):
+        main_ctrl = getattr(self.widget, "_main_controller", None)
+        if main_ctrl is not None and hasattr(main_ctrl, "set_background_fit_areas"):
+            main_ctrl.set_background_fit_areas(areas)
+            return
         table = getattr(self.widget, "tableWidget_BackgroundConstraints", None)
         if table is None:
             return

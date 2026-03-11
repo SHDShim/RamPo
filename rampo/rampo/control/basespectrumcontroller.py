@@ -74,25 +74,28 @@ class BaseSpectrumController(object):
         if self.session_ctrl is not None:
             # Reset carry-over provenance for generic/manual loads.
             self.session_ctrl.set_carryover_source_chi(None)
+        main_ctrl = getattr(self.widget, "_main_controller", None)
+        use_wavenumber = True
+        if main_ctrl is not None and hasattr(main_ctrl, "spectrum_uses_wavenumber"):
+            try:
+                use_wavenumber = bool(main_ctrl.spectrum_uses_wavenumber())
+            except Exception:
+                use_wavenumber = True
         self.model.set_base_ptn(
-            new_filename, self.widget.doubleSpinBox_SetWavelength.value())
+            new_filename,
+            self.widget.doubleSpinBox_SetWavelength.value(),
+            use_wavenumber=use_wavenumber)
         # self.widget.textEdit_DiffractionPatternFileName.setText(
         #    '1D Pattern: ' + self.model.get_base_ptn_filename())
         self.widget.lineEdit_DiffractionPatternFileName.setText(
             str(self.model.get_base_ptn_filename()))
-        main_ctrl = getattr(self.widget, "_main_controller", None)
-        if main_ctrl is not None and hasattr(main_ctrl, "sync_background_roi_spinboxes"):
-            try:
-                main_ctrl.sync_background_roi_spinboxes(force_full_range=True)
-            except Exception:
-                pass
         # Prefer loading full PARAM session state when available for this CHI.
         if self.session_ctrl is not None:
             loaded_param = self.session_ctrl.autoload_param_for_chi(new_filename)
             if loaded_param:
                 if self.ccd_ctrl._is_spe_source():
                     try:
-                        self.ccd_ctrl.process_temp_cake()
+                        self.ccd_ctrl.process_temp_ccd()
                     except Exception:
                         pass
                 # Ensure File > Data backup table reflects the newly loaded CHI
@@ -127,7 +130,7 @@ class BaseSpectrumController(object):
                 (not self.ccd_ctrl._ignore_raw_data_missing()):
             return
 
-        success = self.ccd_ctrl.process_temp_cake()
+        success = self.ccd_ctrl.process_temp_ccd()
         if (not success) and \
                 self.ccd_ctrl._ignore_raw_data_missing() and \
                 (not self.model.associated_image_exists()):
@@ -141,23 +144,14 @@ class BaseSpectrumController(object):
     def _update_bg_params_in_widget(self):
         self.widget.spinBox_BGParam1.setValue(
             self.model.base_ptn.params_chbg[0])
-        self.widget.doubleSpinBox_Background_ROI_min.setValue(
-            self.model.base_ptn.roi[0])
-        self.widget.doubleSpinBox_Background_ROI_max.setValue(
-            self.model.base_ptn.roi[1])
+        main_ctrl = getattr(self.widget, "_main_controller", None)
+        if main_ctrl is not None and hasattr(main_ctrl, "set_background_fit_areas"):
+            main_ctrl.set_background_fit_areas(
+                getattr(self.model.base_ptn, "bg_fit_areas", []) or [])
+            return
         table = getattr(self.widget, "tableWidget_BackgroundConstraints", None)
         if table is not None:
             table.setRowCount(0)
-            for area in getattr(self.model.base_ptn, "bg_fit_areas", []) or []:
-                try:
-                    xmin = float(area[0])
-                    xmax = float(area[1])
-                except Exception:
-                    continue
-                row = table.rowCount()
-                table.insertRow(row)
-                table.setItem(row, 0, QtWidgets.QTableWidgetItem(f"{xmin:.3f}"))
-                table.setItem(row, 1, QtWidgets.QTableWidgetItem(f"{xmax:.3f}"))
 
     def _update_bgsub_from_current_values(self):
         fit_areas = []
@@ -180,15 +174,9 @@ class BaseSpectrumController(object):
         __, y_fit = self.plot_ctrl._get_smoothed_pattern_xy(x_raw, y_raw)
         if not self.plot_ctrl._smoothing_active():
             y_fit = y_raw
-        if (x_raw.min() >= self.widget.doubleSpinBox_Background_ROI_min.value()) or \
-                (x_raw.max() <= self.widget.doubleSpinBox_Background_ROI_min.value()):
-            self.widget.doubleSpinBox_Background_ROI_min.setValue(x_raw.min())
-        if (x_raw.max() <= self.widget.doubleSpinBox_Background_ROI_max.value()) or \
-                (x_raw.min() >= self.widget.doubleSpinBox_Background_ROI_max.value()):
-            self.widget.doubleSpinBox_Background_ROI_max.setValue(x_raw.max())
+        bg_roi = [float(x_raw.min()), float(x_raw.max())]
         self.model.base_ptn.subtract_bg(
-            [self.widget.doubleSpinBox_Background_ROI_min.value(),
-                self.widget.doubleSpinBox_Background_ROI_max.value()],
+            bg_roi,
             [self.widget.spinBox_BGParam1.value()],
             yshift=0,
             fit_areas=fit_areas,

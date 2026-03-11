@@ -34,7 +34,7 @@ class DiffController(object):
         "Asymmetric (0 centered)": "asymmetric_centered",
         "Positive only (0 as min)": "free_range",
         "Negative only (0 as max)": "free_range",
-        "Cake-like free range": "free_range",
+        "CCD-like free range": "free_range",
         "Free range": "free_range",
     }
     _SCALE_ID_TO_MODE = {
@@ -82,7 +82,7 @@ class DiffController(object):
             self.widget.pushButton_DiffScaleToData.clicked.connect(
                 self._set_2d_scale_to_diff_range)
         self.widget.pushButton_ExportDiffChi.clicked.connect(self.export_diff_chi)
-        self.widget.pushButton_ExportDiffCakeNpy.clicked.connect(self.export_diff_cake_npy)
+        self.widget.pushButton_ExportDiffCCDNpy.clicked.connect(self.export_diff_ccd_npy)
 
     def _init_ui_from_state(self):
         if (not hasattr(self.widget, "checkBox_Diff")) and \
@@ -301,12 +301,12 @@ class DiffController(object):
     def _set_gray_scale_controls_enabled(self, enabled):
         if hasattr(self.widget, "groupBox_29"):
             self.widget.groupBox_29.setEnabled(bool(enabled))
-        if hasattr(self.widget, "groupBox_CakeColormap"):
-            self.widget.groupBox_CakeColormap.setEnabled(bool(enabled))
+        if hasattr(self.widget, "groupBox_CCDColormap"):
+            self.widget.groupBox_CCDColormap.setEnabled(bool(enabled))
 
     def _set_diff_scale_controls_enabled(self, enabled):
-        if hasattr(self.widget, "groupBox_DiffCake"):
-            self.widget.groupBox_DiffCake.setEnabled(bool(enabled))
+        if hasattr(self.widget, "groupBox_DiffCCD"):
+            self.widget.groupBox_DiffCCD.setEnabled(bool(enabled))
 
     def _set_toolbar_controls_enabled(self, enabled):
         # Keep Night, ptn always user-controllable.
@@ -340,9 +340,9 @@ class DiffController(object):
     def _get_finite_diff_2d_values(self):
         if (not self.model.diff_img_exist()) or (not self.model.diff_state.has_ref_2d()):
             return np.asarray([], dtype=float)
-        int_cur, tth_cur, chi_cur = self.model.diff_img.get_cake()
+        int_cur, tth_cur, chi_cur = self.model.diff_img.get_ccd()
         int_cur = np.asarray(int_cur, dtype=float)
-        ref_interp = self._interp_ref_cake_to_current(tth_cur, chi_cur)
+        ref_interp = self._interp_ref_ccd_to_current(tth_cur, chi_cur)
         if ref_interp is None:
             return np.asarray([], dtype=float)
         diff_arr = int_cur - ref_interp
@@ -421,10 +421,10 @@ class DiffController(object):
             temp_model = PeakPoModel8()
             ok, __meta = load_model_from_param(temp_model, ref_path)
             if ok and temp_model.diff_img_exist():
-                int_ref, tth_ref, chi_ref = temp_model.diff_img.get_cake()
-                st.ref_cake_int = np.asarray(int_ref, dtype=float)
-                st.ref_cake_tth = np.asarray(tth_ref, dtype=float)
-                st.ref_cake_chi = np.asarray(chi_ref, dtype=float)
+                int_ref, tth_ref, chi_ref = temp_model.diff_img.get_ccd()
+                st.ref_ccd_int = np.asarray(int_ref, dtype=float)
+                st.ref_ccd_tth = np.asarray(tth_ref, dtype=float)
+                st.ref_ccd_chi = np.asarray(chi_ref, dtype=float)
         except Exception:
             # 2D reference is optional.
             pass
@@ -482,6 +482,9 @@ class DiffController(object):
         if not self.model.base_ptn_exist():
             return None, None
         if self.widget.checkBox_BgSub.isChecked():
+            get_processed = getattr(self.model.base_ptn, "get_bgsub_processed", None)
+            if callable(get_processed):
+                return get_processed()
             return self.model.base_ptn.get_bgsub()
         return self.model.base_ptn.get_raw()
 
@@ -519,17 +522,36 @@ class DiffController(object):
         x_ref = np.asarray(x_ref, dtype=float)
         y_ref = np.asarray(y_ref, dtype=float)
         if self.widget.checkBox_BgSub.isChecked():
-            roi_min = float(self.widget.doubleSpinBox_Background_ROI_min.value())
-            roi_max = float(self.widget.doubleSpinBox_Background_ROI_max.value())
             poly_order = int(self.widget.spinBox_BGParam1.value())
+            fit_areas = []
+            table = getattr(self.widget, "tableWidget_BackgroundConstraints", None)
+            if table is not None:
+                main_ctrl = getattr(self.widget, "_main_controller", None)
+                for row in range(table.rowCount()):
+                    area = None
+                    if main_ctrl is not None and hasattr(main_ctrl, "_read_background_area_row"):
+                        area = main_ctrl._read_background_area_row(row)
+                    elif table.item(row, 0) is not None and table.item(row, 1) is not None:
+                        try:
+                            area = [
+                                float(table.item(row, 0).text()),
+                                float(table.item(row, 1).text()),
+                            ]
+                        except Exception:
+                            area = None
+                    if area is None:
+                        continue
+                    fit_areas.append(area)
             if x_ref.size > 0:
-                roi_min = max(float(np.nanmin(x_ref)), roi_min)
-                roi_max = min(float(np.nanmax(x_ref)), roi_max)
-                if roi_max <= roi_min:
-                    roi_min = float(np.nanmin(x_ref))
-                    roi_max = float(np.nanmax(x_ref))
-            ref_spec.get_chbg([roi_min, roi_max], [poly_order], yshift=0)
-            x_ref, y_ref = ref_spec.get_bgsub()
+                roi_min = float(np.nanmin(x_ref))
+                roi_max = float(np.nanmax(x_ref))
+            ref_spec.get_chbg(
+                [roi_min, roi_max],
+                [poly_order],
+                yshift=0,
+                fit_areas=fit_areas,
+            )
+            x_ref, y_ref = ref_spec.get_bgsub_processed()
         return np.asarray(x_ref, dtype=float), np.asarray(y_ref, dtype=float)
 
     def _prepare_ref_1d(self, x_target, smooth=False):
@@ -572,7 +594,7 @@ class DiffController(object):
             return x, y
         return x, y - y_ref
 
-    def _interp_ref_cake_to_current(self, tth_cur, chi_cur):
+    def _interp_ref_ccd_to_current(self, tth_cur, chi_cur):
         st = self.model.diff_state
         if not st.has_ref_2d():
             if st.ref_chi_path not in (None, ""):
@@ -580,9 +602,9 @@ class DiffController(object):
         if not st.has_ref_2d():
             return None
 
-        ref_int = np.asarray(st.ref_cake_int, dtype=float)
-        ref_tth = np.asarray(st.ref_cake_tth, dtype=float)
-        ref_chi = np.asarray(st.ref_cake_chi, dtype=float)
+        ref_int = np.asarray(st.ref_ccd_int, dtype=float)
+        ref_tth = np.asarray(st.ref_ccd_tth, dtype=float)
+        ref_chi = np.asarray(st.ref_ccd_chi, dtype=float)
         if ref_int.ndim != 2:
             return None
 
@@ -626,19 +648,19 @@ class DiffController(object):
         self._ref2d_interp_cache = {interp_key: out}
         return out
 
-    def get_display_cake(self, int_cur, tth_cur, chi_cur):
+    def get_display_ccd(self, int_cur, tth_cur, chi_cur):
         """Return intensity, tth, chi for display (diff or normal)."""
         inten = np.asarray(int_cur, dtype=float)
         tth = np.asarray(tth_cur, dtype=float)
         chi = np.asarray(chi_cur, dtype=float)
         if not self.is_diff_mode_active():
             return inten, tth, chi
-        ref_interp = self._interp_ref_cake_to_current(tth, chi)
+        ref_interp = self._interp_ref_ccd_to_current(tth, chi)
         if ref_interp is None:
             return inten, tth, chi
         return inten - ref_interp, tth, chi
 
-    def get_cake_render_config(self, cake_arr):
+    def get_ccd_render_config(self, ccd_arr):
         st = self.model.diff_state
         if not self.is_diff_mode_active():
             return None
@@ -685,26 +707,26 @@ class DiffController(object):
             return
         writechi(fsave, x_out, y_out)
 
-    def export_diff_cake_npy(self):
+    def export_diff_ccd_npy(self):
         if (not self.model.diff_img_exist()) or (not self.model.base_ptn_exist()):
             QtWidgets.QMessageBox.warning(
                 self.widget,
                 "Warning",
-                "No cake data available for export.",
+                "No ccd data available for export.",
             )
             return
-        int_cur, tth_cur, chi_cur = self.model.diff_img.get_cake()
-        int_out, __, __ = self.get_display_cake(int_cur, tth_cur, chi_cur)
+        int_cur, tth_cur, chi_cur = self.model.diff_img.get_ccd()
+        int_out, __, __ = self.get_display_ccd(int_cur, tth_cur, chi_cur)
         if int_out is None:
-            QtWidgets.QMessageBox.warning(self.widget, "Warning", "No diff cake data to export.")
+            QtWidgets.QMessageBox.warning(self.widget, "Warning", "No diff ccd data to export.")
             return
         param_dir = get_temp_dir(self.model.get_base_ptn_filename(), branch="-rampo")
         os.makedirs(param_dir, exist_ok=True)
-        base_name = "diff_" + os.path.splitext(os.path.basename(self.model.base_ptn.fname))[0] + "_cake.npy"
+        base_name = "diff_" + os.path.splitext(os.path.basename(self.model.base_ptn.fname))[0] + "_ccd.npy"
         default_path = os.path.join(param_dir, base_name)
         fsave = QtWidgets.QFileDialog.getSaveFileName(
             self.widget,
-            "Save Diff Cake NPY",
+            "Save Diff CCD NPY",
             default_path,
             "NumPy files (*.npy)",
         )[0]
@@ -720,7 +742,7 @@ class DiffController(object):
         py_path = root + "_plot.py"
         np.save(tth_path, tth_cur)
         np.save(chi_path, chi_cur)
-        cfg = self.get_cake_render_config(int_out) or {}
+        cfg = self.get_ccd_render_config(int_out) or {}
         cmap = cfg.get("cmap", "coolwarm")
         vmin = float(cfg.get("vmin", self.model.diff_state.vmin_2d))
         vmax = float(cfg.get("vmax", self.model.diff_state.vmax_2d))

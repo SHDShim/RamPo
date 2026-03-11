@@ -9,7 +9,7 @@ _SCALE_MODE_LABEL_TO_ID = {
     "0 Centered": "asymmetric_centered",
     "Positive only (0 as min)": "free_range",
     "Negative only (0 as max)": "free_range",
-    "Cake-like free range": "free_range",
+    "CCD-like free range": "free_range",
     "Free range": "free_range",
 }
 
@@ -29,26 +29,26 @@ class DiffState:
     # Loaded references
     ref_x: Optional[np.ndarray] = field(default=None, repr=False)
     ref_y: Optional[np.ndarray] = field(default=None, repr=False)
-    ref_cake_int: Optional[np.ndarray] = field(default=None, repr=False)
-    ref_cake_tth: Optional[np.ndarray] = field(default=None, repr=False)
-    ref_cake_chi: Optional[np.ndarray] = field(default=None, repr=False)
+    ref_ccd_int: Optional[np.ndarray] = field(default=None, repr=False)
+    ref_ccd_tth: Optional[np.ndarray] = field(default=None, repr=False)
+    ref_ccd_chi: Optional[np.ndarray] = field(default=None, repr=False)
 
     def clear_reference_data(self):
         self.ref_x = None
         self.ref_y = None
-        self.ref_cake_int = None
-        self.ref_cake_tth = None
-        self.ref_cake_chi = None
+        self.ref_ccd_int = None
+        self.ref_ccd_tth = None
+        self.ref_ccd_chi = None
 
     def has_ref_1d(self) -> bool:
         return (self.ref_x is not None) and (self.ref_y is not None) and (self.ref_x.size > 1)
 
     def has_ref_2d(self) -> bool:
         return (
-            (self.ref_cake_int is not None)
-            and (self.ref_cake_tth is not None)
-            and (self.ref_cake_chi is not None)
-            and (self.ref_cake_int.size > 0)
+            (self.ref_ccd_int is not None)
+            and (self.ref_ccd_tth is not None)
+            and (self.ref_ccd_chi is not None)
+            and (self.ref_ccd_int.size > 0)
         )
 
     def to_ui_dict(self):

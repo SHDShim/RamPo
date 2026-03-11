@@ -88,10 +88,48 @@ class PeakFitController(object):
                     y_range[0] - margin, y_range[1] + margin))
 
     def get_style_for_unsaved(self):
-        return "Background-color:rgb(255,204,255);color:rgb(0,0,0);"
+        return (
+            "QTableWidget {"
+            "background-color: rgb(255, 228, 242);"
+            "alternate-background-color: rgb(255, 239, 247);"
+            "color: rgb(17, 24, 39);"
+            "gridline-color: rgb(156, 163, 175);"
+            "selection-background-color: rgb(147, 197, 253);"
+            "selection-color: rgb(17, 24, 39);"
+            "}"
+            "QTableWidget::item {"
+            "background-color: rgb(255, 228, 242);"
+            "color: rgb(17, 24, 39);"
+            "}"
+            "QHeaderView::section {"
+            "background-color: rgb(107, 114, 128);"
+            "color: rgb(249, 250, 251);"
+            "border: 1px solid rgb(75, 85, 99);"
+            "padding: 2px 4px;"
+            "}"
+        )
 
     def get_style_for_saved(self):
-        return "Background-color:None;color:rgb(0,0,0);"
+        return (
+            "QTableWidget {"
+            "background-color: rgb(229, 231, 235);"
+            "alternate-background-color: rgb(243, 244, 246);"
+            "color: rgb(17, 24, 39);"
+            "gridline-color: rgb(156, 163, 175);"
+            "selection-background-color: rgb(147, 197, 253);"
+            "selection-color: rgb(17, 24, 39);"
+            "}"
+            "QTableWidget::item {"
+            "background-color: rgb(229, 231, 235);"
+            "color: rgb(17, 24, 39);"
+            "}"
+            "QHeaderView::section {"
+            "background-color: rgb(107, 114, 128);"
+            "color: rgb(249, 250, 251);"
+            "border: 1px solid rgb(75, 85, 99);"
+            "padding: 2px 4px;"
+            "}"
+        )
 
     def set_tableWidget_PkParams_saved(self):
         self.widget.tableWidget_PkParams.setStyleSheet(
@@ -296,6 +334,7 @@ class PeakFitController(object):
     '''
 
     def conduct_fitting(self):
+        self.release_mouse_from_peak_input()
         if not self.model.current_section_exist():
             QtWidgets.QMessageBox.warning(
                 self.widget, "Warning", "No section is defined")
