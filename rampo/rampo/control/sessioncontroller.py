@@ -309,6 +309,9 @@ class SessionController(object):
             if hasattr(self.widget, "spinBox_SpectrumSGWindow") else 0,
             "sg_polyorder": int(self.widget.spinBox_SpectrumSGPoly.value())
             if hasattr(self.widget, "spinBox_SpectrumSGPoly") else 3,
+            "show_raw": bool(
+                getattr(self.widget, "checkBox_SpectrumShowRaw", None) and
+                self.widget.checkBox_SpectrumShowRaw.isChecked()),
             "raw_file": (
                 os.path.splitext(os.path.basename(self.model.base_ptn.fname))[0] + ".chi"
             ) if self.model.base_ptn_exist() else None,
@@ -389,6 +392,9 @@ class SessionController(object):
             if hasattr(self.widget, "spinBox_SpectrumSGPoly"):
                 self.widget.spinBox_SpectrumSGPoly.setValue(
                     int(spectrum.get("sg_polyorder", 3)))
+            if hasattr(self.widget, "checkBox_SpectrumShowRaw"):
+                self.widget.checkBox_SpectrumShowRaw.setChecked(
+                    bool(spectrum.get("show_raw", True)))
         ccd = (ui_state or {}).get("ccd", {})
         if ccd != {}:
             if "vmin" in ccd and hasattr(self.widget, "doubleSpinBox_CCDScaleMin"):

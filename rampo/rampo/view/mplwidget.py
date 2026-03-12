@@ -52,7 +52,7 @@ class MplCanvas(FigureCanvasQTAgg):
 
     def _style_axis(self, axis):
         axis.set_facecolor(self.bgColor)
-        axis.grid(True, color=self.gridColor, alpha=0.35, linewidth=0.6)
+        axis.grid(False)
         axis.tick_params(colors=self.objColor)
         axis.xaxis.label.set_color(self.objColor)
         axis.yaxis.label.set_color(self.objColor)

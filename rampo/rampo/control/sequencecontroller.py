@@ -386,7 +386,6 @@ class SequenceController(object):
         self._seq_ax.set_ylabel("Integrated intensity")
         self._seq_ax.xaxis.set_major_locator(MaxNLocator(integer=True))
         self._seq_ax.xaxis.set_major_formatter(FormatStrFormatter("%d"))
-        self._seq_ax.grid(True, alpha=0.22, linewidth=0.6)
         self._seq_fig.tight_layout()
         self._seq_canvas.draw_idle()
 
@@ -517,7 +516,6 @@ class SequenceController(object):
             "    ax.set_ylabel('Integrated intensity')\n"
             "    ax.xaxis.set_major_locator(MaxNLocator(integer=True))\n"
             "    ax.xaxis.set_major_formatter(FormatStrFormatter('%d'))\n"
-            "    ax.grid(True, alpha=0.22, linewidth=0.6)\n"
             "    fig.tight_layout()\n"
             "    plt.show()\n\n"
             "if __name__ == '__main__':\n"

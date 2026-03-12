@@ -1773,6 +1773,9 @@ class MainWindow(QtWidgets.QMainWindow, Ui_MainWindow):
         if button is None:
             return
         checked_bg = checked_bg or pressed_bg
+        active_bg = "#1f2937"
+        active_border = "#f3f4f6"
+        active_text = "#f9fafb"
         button.setMinimumHeight(25)
         button.setMaximumHeight(25)
         button.setStyleSheet(
@@ -1787,15 +1790,30 @@ class MainWindow(QtWidgets.QMainWindow, Ui_MainWindow):
             f"background-color: {hover_bg};"
             "}"
             "QPushButton:pressed {"
-            f"background-color: {pressed_bg};"
-            "border: 2px solid #111827;"
+            f"background-color: {active_bg};"
+            f"color: {active_text};"
+            f"border: 2px solid {active_border};"
             "padding-top: 2px;"
             "padding-left: 11px;"
             "padding-right: 9px;"
             "}"
             "QPushButton:checked {"
-            f"background-color: {checked_bg};"
-            "border: 2px solid #111827;"
+            f"background-color: {active_bg};"
+            f"color: {active_text};"
+            f"border: 2px solid {active_border};"
+            "padding-top: 1px;"
+            "padding-left: 10px;"
+            "padding-right: 10px;"
+            "}"
+            "QPushButton:checked:hover {"
+            "background-color: #111827;"
+            f"color: {active_text};"
+            f"border: 2px solid {active_border};"
+            "}"
+            "QPushButton:checked:pressed {"
+            "background-color: #0f172a;"
+            f"color: {active_text};"
+            f"border: 2px solid {active_border};"
             "padding-top: 2px;"
             "padding-left: 11px;"
             "padding-right: 9px;"
@@ -2083,6 +2101,9 @@ class MainWindow(QtWidgets.QMainWindow, Ui_MainWindow):
         self.spinBox_SpectrumSGPoly.setMinimumWidth(smoothing_spin_width)
         self.spinBox_SpectrumSGPoly.setMaximumWidth(smoothing_spin_width)
         self.spinBox_SpectrumSGPoly.setToolTip("Savitzky-Golay polynomial order.")
+        self.checkBox_SpectrumShowRaw = QtWidgets.QCheckBox("Show raw", self.groupBox_SpectrumSmooth)
+        self.checkBox_SpectrumShowRaw.setObjectName("checkBox_SpectrumShowRaw")
+        self.checkBox_SpectrumShowRaw.setChecked(True)
 
         self.gridLayout_SpectrumSmooth.addWidget(self.label_SpectrumDespike, 0, 0, 1, 1)
         self.gridLayout_SpectrumSmooth.addWidget(self.spinBox_SpectrumDespike, 0, 2, 1, 1)
@@ -2090,11 +2111,12 @@ class MainWindow(QtWidgets.QMainWindow, Ui_MainWindow):
         self.gridLayout_SpectrumSmooth.addWidget(self.spinBox_SpectrumSGWindow, 1, 2, 1, 1)
         self.gridLayout_SpectrumSmooth.addWidget(self.label_SpectrumSGPoly, 2, 0, 1, 1)
         self.gridLayout_SpectrumSmooth.addWidget(self.spinBox_SpectrumSGPoly, 2, 2, 1, 1)
+        self.gridLayout_SpectrumSmooth.addWidget(self.checkBox_SpectrumShowRaw, 3, 0, 1, 3)
         self.pushButton_SpectrumRaw = QtWidgets.QPushButton("Go back to raw", self.groupBox_SpectrumSmooth)
         self.pushButton_SpectrumRaw.setObjectName("pushButton_SpectrumRaw")
         self.pushButton_SpectrumRaw.setMinimumHeight(25)
         self.pushButton_SpectrumRaw.setMaximumHeight(25)
-        self.gridLayout_SpectrumSmooth.addWidget(self.pushButton_SpectrumRaw, 3, 0, 1, 3)
+        self.gridLayout_SpectrumSmooth.addWidget(self.pushButton_SpectrumRaw, 4, 0, 1, 3)
         self.gridLayout_SpectrumSmooth.setColumnStretch(1, 1)
         self.verticalLayout_21.insertWidget(3, self.groupBox_SpectrumSmooth)
 

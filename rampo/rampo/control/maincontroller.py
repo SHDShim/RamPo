@@ -208,6 +208,9 @@ class MainController(object):
             if hasattr(self.widget, name):
                 getattr(self.widget, name).valueChanged.connect(
                     self.apply_spectrum_smoothing)
+        if hasattr(self.widget, "checkBox_SpectrumShowRaw"):
+            self.widget.checkBox_SpectrumShowRaw.stateChanged.connect(
+                self.apply_spectrum_smoothing)
         if hasattr(self.widget, "pushButton_BGAreaAdd"):
             self.widget.pushButton_BGAreaAdd.toggled.connect(
                 self.toggle_background_area_selector)
@@ -650,6 +653,10 @@ class MainController(object):
             self.settings.setValue(
                 'spectrum_smoothing_sg_polyorder',
                 int(self.widget.spinBox_SpectrumSGPoly.value()))
+        if hasattr(self.widget, "checkBox_SpectrumShowRaw"):
+            self.settings.setValue(
+                'spectrum_smoothing_show_raw',
+                bool(self.widget.checkBox_SpectrumShowRaw.isChecked()))
         if hasattr(self.widget, "checkBox_PreferRawSpe"):
             self.settings.setValue(
                 'prefer_raw_spe',
@@ -724,6 +731,10 @@ class MainController(object):
             except Exception:
                 sg_poly = 3
             self.widget.spinBox_SpectrumSGPoly.setValue(sg_poly)
+        if hasattr(self.widget, "checkBox_SpectrumShowRaw"):
+            raw = self.settings.value('spectrum_smoothing_show_raw', True)
+            val = str(raw).lower() in ("1", "true", "yes") if isinstance(raw, str) else bool(raw)
+            self.widget.checkBox_SpectrumShowRaw.setChecked(val)
         if hasattr(self.widget, "checkBox_PreferRawSpe"):
             raw = self.settings.value('prefer_raw_spe', True)
             val = str(raw).lower() in ("1", "true", "yes") if isinstance(raw, str) else bool(raw)
@@ -865,10 +876,6 @@ class MainController(object):
         }
 
     def _should_carry_nav_category(self, key, checkbox_attr):
-        presence = self.session_ctrl.get_last_param_category_presence()
-        if not bool(presence.get(key, False)):
-            # If target CHI has no existing info, always carry from current.
-            return True
         if not hasattr(self.widget, checkbox_attr):
             return True
         return bool(getattr(self.widget, checkbox_attr).isChecked())
@@ -1314,6 +1321,7 @@ class MainController(object):
                 "despike_kernel": 0,
                 "sg_window": 0,
                 "sg_polyorder": 3,
+                "show_raw": True,
             }
         despike = int(self.widget.spinBox_SpectrumDespike.value())
         sg_window = int(self.widget.spinBox_SpectrumSGWindow.value()) \
@@ -1333,6 +1341,9 @@ class MainController(object):
             "despike_kernel": despike,
             "sg_window": sg_window,
             "sg_polyorder": sg_poly,
+            "show_raw": bool(
+                getattr(self.widget, "checkBox_SpectrumShowRaw", None) and
+                self.widget.checkBox_SpectrumShowRaw.isChecked()),
         }
 
     def apply_spectrum_smoothing(self):
@@ -1355,6 +1366,12 @@ class MainController(object):
                 self.widget.spinBox_SpectrumSGPoly.blockSignals(True)
                 self.widget.spinBox_SpectrumSGPoly.setValue(desired)
                 self.widget.spinBox_SpectrumSGPoly.blockSignals(False)
+        if hasattr(self.widget, "checkBox_SpectrumShowRaw"):
+            desired = bool(params.get("show_raw", True))
+            if self.widget.checkBox_SpectrumShowRaw.isChecked() != desired:
+                self.widget.checkBox_SpectrumShowRaw.blockSignals(True)
+                self.widget.checkBox_SpectrumShowRaw.setChecked(desired)
+                self.widget.checkBox_SpectrumShowRaw.blockSignals(False)
         if self._plot_update_deferred():
             return
         self.plot_ctrl.update()

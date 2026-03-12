@@ -176,13 +176,18 @@ class MplController(object):
         if self.diff_ctrl is not None:
             try:
                 x_plot, y_plot = self.diff_ctrl.get_display_pattern(x_plot, y_plot)
+                if self._show_raw_with_smoothing():
+                    x_raw, y_raw = self.diff_ctrl.get_display_pattern(x_raw, y_raw)
             except Exception:
                 pass
+        finite_parts = []
         y_visible = np.asarray(y_plot, dtype=float)
-        finite = y_visible[np.isfinite(y_visible)]
-        if finite.size == 0:
+        finite_parts.append(y_visible[np.isfinite(y_visible)])
+        if self._show_raw_with_smoothing():
             raw_visible = np.asarray(y_raw, dtype=float)
-            finite = raw_visible[np.isfinite(raw_visible)]
+            finite_parts.append(raw_visible[np.isfinite(raw_visible)])
+        finite = np.concatenate([arr for arr in finite_parts if arr.size > 0]) \
+            if finite_parts else np.asarray([], dtype=float)
         if finite.size == 0:
             return (x_plot.min(), x_plot.max(), -1.0, 1.0)
         y_min = float(np.min(finite))
@@ -243,11 +248,18 @@ class MplController(object):
             "despike_kernel": despike,
             "sg_window": sg_window,
             "sg_polyorder": sg_poly,
+            "show_raw": bool(
+                getattr(self.widget, "checkBox_SpectrumShowRaw", None) and
+                self.widget.checkBox_SpectrumShowRaw.isChecked()),
         }
 
     def _smoothing_active(self):
         settings = self._get_smoothing_settings()
         return (settings["despike_kernel"] > 1) or (settings["sg_window"] > 1)
+
+    def _show_raw_with_smoothing(self):
+        settings = self._get_smoothing_settings()
+        return bool(settings.get("show_raw", True))
 
     def _median_filter_1d_edge_safe(self, arr, kernel_size):
         data = np.asarray(arr, dtype=float).reshape(-1)
@@ -529,6 +541,7 @@ class MplController(object):
         else:
             imshow_kwargs["norm"] = norm
         self.widget.mpl.canvas.ax_ccd.imshow(int_new, **imshow_kwargs)
+        self.widget.mpl.canvas.ax_ccd.grid(False)
         if hasattr(self.widget, "ccd_hist_widget"):
             self.widget.ccd_hist_widget.set_data(
                 int_new, vmin=float(climits[0]), vmax=float(climits[1]))
@@ -811,14 +824,21 @@ class MplController(object):
                 x_s, y_s = self.diff_ctrl.get_display_pattern(x_s, y_s)
             except Exception:
                 pass
+        show_raw = self._show_raw_with_smoothing()
         if gsas_style:
-            self.widget.mpl.canvas.ax_pattern.plot(
-                x, y, c=self.model.base_ptn.color, marker='o',
-                linestyle='None', ms=3)
+            if self._smoothing_active() and (not show_raw):
+                self.widget.mpl.canvas.ax_pattern.plot(
+                    x_s, y_s, c=self.model.base_ptn.color, marker='o',
+                    linestyle='None', ms=3)
+            else:
+                self.widget.mpl.canvas.ax_pattern.plot(
+                    x, y, c=self.model.base_ptn.color, marker='o',
+                    linestyle='None', ms=3)
         elif self._smoothing_active():
-            self.widget.mpl.canvas.ax_pattern.plot(
-                x, y, c=self.model.base_ptn.color,
-                marker='.', linestyle='None', ms=3, alpha=0.5)
+            if show_raw:
+                self.widget.mpl.canvas.ax_pattern.plot(
+                    x, y, c=self.model.base_ptn.color,
+                    marker='.', linestyle='None', ms=3, alpha=0.5)
             self.widget.mpl.canvas.ax_pattern.plot(
                 x_s, y_s, c=self.model.base_ptn.color,
                 lw=float(
