@@ -678,7 +678,7 @@ class MainWindow(QtWidgets.QMainWindow, Ui_MainWindow):
                 self.tableWidget_BackgroundConstraints.setSizePolicy(
                     QtWidgets.QSizePolicy.Expanding, QtWidgets.QSizePolicy.Fixed)
                 self.gridLayout_9.addWidget(self.tableWidget_BackgroundConstraints, 1, 0, 1, 3)
-                self.pushButton_BGAreaAdd = QtWidgets.QPushButton("Add area", self.groupBox_4)
+                self.pushButton_BGAreaAdd = QtWidgets.QPushButton("Add area (OFF)", self.groupBox_4)
                 self.pushButton_BGAreaAdd.setCheckable(True)
                 self._set_action_button_style(
                     self.pushButton_BGAreaAdd,
@@ -1721,6 +1721,37 @@ class MainWindow(QtWidgets.QMainWindow, Ui_MainWindow):
             lambda: self.set_jstep(0.1))
         self.pushButton_AboutPeakpo.clicked.connect(self.about)
         self.pushButton_Help.clicked.connect(self.shortcutkeys)
+        toggle_labels = {
+            "pushButton_BGAreaAdd": "Add area",
+            "pushButton_CCDSelectRoi": "Select ROI",
+            "pushButton_MapSetRoi": "Select ROI",
+            "pushButton_SeqSetRoi": "Select ROI",
+            "pushButton_AddRemoveFromMouse": "Pick peaks",
+            "pushButton_ApplyMask": "Apply mask",
+        }
+        for name, label in toggle_labels.items():
+            if hasattr(self, name):
+                self._register_toggle_button_label(getattr(self, name), label)
+
+    def _sync_bg_area_add_button_text(self, checked=None):
+        del checked
+        if hasattr(self, "pushButton_BGAreaAdd"):
+            self._sync_toggle_button_text(self.pushButton_BGAreaAdd)
+
+    def _register_toggle_button_label(self, button, base_text):
+        if button is None:
+            return
+        button.setProperty("toggle_base_text", str(base_text))
+        button.toggled.connect(
+            lambda _checked, btn=button: self._sync_toggle_button_text(btn))
+        self._sync_toggle_button_text(button)
+
+    def _sync_toggle_button_text(self, button):
+        if button is None:
+            return
+        base_text = str(button.property("toggle_base_text") or button.text())
+        button.setText(
+            f"{base_text} ({'ON' if button.isChecked() else 'OFF'})")
 
     def set_jstep(self, value):
         self.doubleSpinBox_JCPDSStep.setValue(value)

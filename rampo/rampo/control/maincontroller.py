@@ -1731,6 +1731,8 @@ class MainController(object):
                 self.widget.pushButton_BGAreaAdd.blockSignals(True)
                 self.widget.pushButton_BGAreaAdd.setChecked(False)
                 self.widget.pushButton_BGAreaAdd.blockSignals(False)
+                if hasattr(self.widget, "_sync_bg_area_add_button_text"):
+                    self.widget._sync_bg_area_add_button_text(False)
             return
         ax = getattr(self.widget.mpl.canvas, "ax_pattern", None)
         if ax is None:
@@ -1776,6 +1778,8 @@ class MainController(object):
             self.widget.pushButton_BGAreaAdd.blockSignals(True)
             self.widget.pushButton_BGAreaAdd.setChecked(False)
             self.widget.pushButton_BGAreaAdd.blockSignals(False)
+            if hasattr(self.widget, "_sync_bg_area_add_button_text"):
+                self.widget._sync_bg_area_add_button_text(False)
 
     def _background_area_selector_active(self):
         if self._bg_area_selector is None:

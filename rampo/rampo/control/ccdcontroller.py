@@ -266,6 +266,9 @@ class CCDController(object):
             self.widget.pushButton_CCDSelectRoi.blockSignals(True)
             self.widget.pushButton_CCDSelectRoi.setChecked(True)
             self.widget.pushButton_CCDSelectRoi.blockSignals(False)
+            if hasattr(self.widget, "_sync_toggle_button_text"):
+                self.widget._sync_toggle_button_text(
+                    self.widget.pushButton_CCDSelectRoi)
         try:
             self.widget.mpl.canvas.draw_idle()
         except Exception:
@@ -312,6 +315,9 @@ class CCDController(object):
             self.widget.pushButton_CCDSelectRoi.blockSignals(True)
             self.widget.pushButton_CCDSelectRoi.setChecked(False)
             self.widget.pushButton_CCDSelectRoi.blockSignals(False)
+            if hasattr(self.widget, "_sync_toggle_button_text"):
+                self.widget._sync_toggle_button_text(
+                    self.widget.pushButton_CCDSelectRoi)
 
     def _on_row_roi_press(self, event):
         ax = getattr(self.widget.mpl.canvas, "ax_ccd", None)
