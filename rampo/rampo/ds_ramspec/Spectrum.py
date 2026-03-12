@@ -28,7 +28,7 @@ class Spectrum(object):
         self.y_bgsub_processed = None
         self.x_bg = None
         self.y_bg = None
-        self.params_chbg = [3]
+        self.params_chbg = [1]
         self.bg_fit_areas = []
 
     def read_file(self, fname):

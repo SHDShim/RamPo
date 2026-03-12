@@ -328,12 +328,14 @@ class MainWindow(QtWidgets.QMainWindow, Ui_MainWindow):
             "alternate-background-color: #e5e7eb;"
             "color: #111827;"
             "gridline-color: #9ca3af;"
-            "selection-background-color: #93c5fd;"
-            "selection-color: #111827;"
             "}"
             "QTableWidget::item {"
             "background-color: #d1d5db;"
             "color: #111827;"
+            "}"
+            "QTableWidget::item:selected {"
+            "background-color: #1e40af;"
+            "color: #f8fafc;"
             "}"
             "QHeaderView::section {"
             "background-color: #6b7280;"
@@ -635,7 +637,7 @@ class MainWindow(QtWidgets.QMainWindow, Ui_MainWindow):
         self.label_6.setText("Polynomial order:")
         self.spinBox_BGParam1.setMinimum(0)
         self.spinBox_BGParam1.setMaximum(99)
-        self.spinBox_BGParam1.setValue(3)
+        self.spinBox_BGParam1.setValue(1)
         self.spinBox_BGParam1.setMinimumWidth(bg_spin_width)
         self.spinBox_BGParam1.setMaximumWidth(bg_spin_width)
         self.spinBox_BGParam1.setToolTip("Polynomial order for Raman background fit")

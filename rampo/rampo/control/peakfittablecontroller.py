@@ -97,7 +97,12 @@ class PeakfitTableController(object):
         n_columns = 3
         n_rows = len(valid_sections)  # count for number of sections
         if n_rows == 0:
+            self.widget.tableWidget_PkFtSections.setColumnCount(n_columns)
+            self.widget.tableWidget_PkFtSections.setRowCount(0)
+            self.widget.tableWidget_PkFtSections.clearSelection()
             self.widget.tableWidget_PkFtSections.clearContents()
+            self.widget.tableWidget_PkFtSections.setHorizontalHeaderLabels(
+                ['Time', 'xmin', 'xmax'])
             return
         self.widget.tableWidget_PkFtSections.setColumnCount(n_columns)
         self.widget.tableWidget_PkFtSections.setRowCount(n_rows)

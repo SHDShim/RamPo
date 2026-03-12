@@ -292,7 +292,7 @@ class MainController(object):
                 self.apply_changes_to_graph)
         self.widget.pushButton_S_Zoom.clicked.connect(self.plot_new_graph)
         self.widget.checkBox_AutoY.clicked.connect(self.apply_changes_to_graph)
-        self.widget.checkBox_BgSub.clicked.connect(self.apply_changes_to_graph)
+        self.widget.checkBox_BgSub.clicked.connect(self._on_bgsub_toggled)
         if hasattr(self.widget, "checkBox_ShowBg"):
             self.widget.checkBox_ShowBg.clicked.connect(
                 self.apply_changes_to_graph)
@@ -505,6 +505,15 @@ class MainController(object):
                 pass
 
     def plot_new_graph(self):
+        if hasattr(self.widget, "checkBox_AutoY") and \
+                self.widget.checkBox_AutoY.isChecked() and \
+                hasattr(self, "base_spectrum_ctrl") and \
+                hasattr(self.base_spectrum_ctrl, "ccd_ctrl"):
+            try:
+                self.base_spectrum_ctrl.ccd_ctrl.apply_auto_ccd_scale(
+                    refresh_plot=False)
+            except Exception:
+                pass
         self.plot_ctrl.zoom_out_graph()
         if hasattr(self, "map_ctrl") and (self.map_ctrl is not None):
             try:
@@ -516,6 +525,13 @@ class MainController(object):
                 self.seq_ctrl.refresh_roi_overlays()
             except Exception:
                 pass
+
+    def _on_bgsub_toggled(self):
+        if hasattr(self.widget, "checkBox_AutoY") and \
+                self.widget.checkBox_AutoY.isChecked():
+            self.plot_new_graph()
+            return
+        self.apply_changes_to_graph()
 
     def _capture_navigation_plot_state(self):
         canvas = getattr(getattr(self.widget, "mpl", None), "canvas", None)
@@ -945,7 +961,7 @@ class MainController(object):
 
         if self._should_carry_nav_category("background", "checkBox_CarryNavBackground"):
             bg = snap["background"]
-            self.widget.spinBox_BGParam1.setValue(int(bg.get("poly_order", 3)))
+            self.widget.spinBox_BGParam1.setValue(int(bg.get("poly_order", 1)))
             self.set_background_fit_areas(bg.get("areas", []))
             if self.model.base_ptn_exist():
                 self.update_bgsub()

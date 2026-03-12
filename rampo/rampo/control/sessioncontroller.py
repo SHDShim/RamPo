@@ -379,7 +379,7 @@ class SessionController(object):
                 self.widget.doubleSpinBox_JCPDSStep.setValue(float(pt["jcpds_step"]))
         bg = (ui_state or {}).get("background", {})
         if bg != {}:
-            self.widget.spinBox_BGParam1.setValue(int(bg.get("poly_order", 3)))
+            self.widget.spinBox_BGParam1.setValue(int(bg.get("poly_order", 1)))
             self._apply_background_areas(bg.get("areas", []))
         spectrum = (ui_state or {}).get("spectrum", {})
         if spectrum != {}:
@@ -977,12 +977,14 @@ class SessionController(object):
             "alternate-background-color: rgb(243, 244, 246);"
             "color: rgb(17, 24, 39);"
             "gridline-color: rgb(156, 163, 175);"
-            "selection-background-color: rgb(147, 197, 253);"
-            "selection-color: rgb(17, 24, 39);"
             "}"
             "QTableWidget::item {"
             "background-color: rgb(229, 231, 235);"
             "color: rgb(17, 24, 39);"
+            "}"
+            "QTableWidget::item:selected {"
+            "background-color: rgb(30, 64, 175);"
+            "color: rgb(248, 250, 252);"
             "}"
             "QHeaderView::section {"
             "background-color: rgb(107, 114, 128);"

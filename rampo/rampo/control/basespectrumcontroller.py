@@ -63,7 +63,10 @@ class BaseSpectrumController(object):
                 old_filename = None
             new_filename = filen
             self._load_a_new_pattern(new_filename)
-            if old_filename is None:
+            auto_yz = bool(
+                getattr(self.widget, "checkBox_AutoY", None) and
+                self.widget.checkBox_AutoY.isChecked())
+            if (old_filename is None) or auto_yz:
                 self.plot_new_graph()
             else:
                 self.apply_changes_to_graph()
@@ -223,9 +226,17 @@ class BaseSpectrumController(object):
         self.model.base_ptn.write_temporary_bgfiles(temp_dir)
 
     def apply_changes_to_graph(self):
+        main_ctrl = getattr(self.widget, "_main_controller", None)
+        if main_ctrl is not None and hasattr(main_ctrl, "apply_changes_to_graph"):
+            main_ctrl.apply_changes_to_graph()
+            return
         self.plot_ctrl.update()
 
     def plot_new_graph(self):
+        main_ctrl = getattr(self.widget, "_main_controller", None)
+        if main_ctrl is not None and hasattr(main_ctrl, "plot_new_graph"):
+            main_ctrl.plot_new_graph()
+            return
         self.plot_ctrl.zoom_out_graph()
 
 

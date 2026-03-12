@@ -29,6 +29,8 @@ class PeakFitController(object):
             self.clear_this_section)
         self.widget.pushButton_PkFtSectionRemove.clicked.connect(
             self.remove_section)
+        self.widget.pushButton_PkFtSectionClear.clicked.connect(
+            self.clear_section_list)
         self.widget.pushButton_PkFtSectionSetToCurrent.clicked.\
             connect(self.set_section_to_current)
         self.widget.pushButton_ZoomToSection.clicked.connect(
@@ -103,12 +105,14 @@ class PeakFitController(object):
             "alternate-background-color: rgb(255, 239, 247);"
             "color: rgb(17, 24, 39);"
             "gridline-color: rgb(156, 163, 175);"
-            "selection-background-color: rgb(147, 197, 253);"
-            "selection-color: rgb(17, 24, 39);"
             "}"
             "QTableWidget::item {"
             "background-color: rgb(255, 228, 242);"
             "color: rgb(17, 24, 39);"
+            "}"
+            "QTableWidget::item:selected {"
+            "background-color: rgb(30, 64, 175);"
+            "color: rgb(248, 250, 252);"
             "}"
             "QHeaderView::section {"
             "background-color: rgb(107, 114, 128);"
@@ -125,12 +129,14 @@ class PeakFitController(object):
             "alternate-background-color: rgb(243, 244, 246);"
             "color: rgb(17, 24, 39);"
             "gridline-color: rgb(156, 163, 175);"
-            "selection-background-color: rgb(147, 197, 253);"
-            "selection-color: rgb(17, 24, 39);"
             "}"
             "QTableWidget::item {"
             "background-color: rgb(229, 231, 235);"
             "color: rgb(17, 24, 39);"
+            "}"
+            "QTableWidget::item:selected {"
+            "background-color: rgb(30, 64, 175);"
+            "color: rgb(248, 250, 252);"
             "}"
             "QHeaderView::section {"
             "background-color: rgb(107, 114, 128);"
@@ -249,7 +255,7 @@ class PeakFitController(object):
     def _clear_all_sections(self):
         '''clean both sections and currentSection'''
         self.model.clear_section_list()
-        self.widget.tableWidget_PkFtSections.clearContents()
+        self.peakfit_table_ctrl.update_sections()
         self._clear_current_section()
 
     def remove_section(self):

@@ -185,7 +185,15 @@ class CCDController(object):
             return False
         self._refresh_bgsub_for_current_spectrum()
         if refresh_plot:
-            self._apply_changes_to_graph()
+            main_ctrl = getattr(self.widget, "_main_controller", None)
+            auto_yz = bool(
+                getattr(self.widget, "checkBox_AutoY", None) and
+                self.widget.checkBox_AutoY.isChecked())
+            if auto_yz and (main_ctrl is not None) and \
+                    hasattr(main_ctrl, "plot_new_graph"):
+                main_ctrl.plot_new_graph()
+            else:
+                self._apply_changes_to_graph()
         return True
 
     def _refresh_bgsub_for_current_spectrum(self):
@@ -475,6 +483,9 @@ class CCDController(object):
     """
 
     def reset_max_ccd_scale(self):
+        self.apply_auto_ccd_scale(refresh_plot=True)
+
+    def _compute_auto_ccd_scale_bounds(self):
         self._ensure_row_roi_defined_for_full_ccd()
         self._set_row_roi_spin_limits()
         arr = np.asarray([], dtype=float)
@@ -494,11 +505,19 @@ class CCDController(object):
             arr = np.asarray(intensity_ccd, dtype=float).ravel()
         arr = arr[np.isfinite(arr)]
         if arr.size == 0:
-            return
+            return None
         vmin = float(np.min(arr))
         vmax = float(np.max(arr))
-        self._set_ccd_scale_spinboxes(vmin, vmax)
-        self._apply_changes_to_graph()
+        return vmin, vmax
+
+    def apply_auto_ccd_scale(self, refresh_plot=True):
+        bounds = self._compute_auto_ccd_scale_bounds()
+        if bounds is None:
+            return False
+        self._set_ccd_scale_spinboxes(bounds[0], bounds[1])
+        if refresh_plot:
+            self._apply_changes_to_graph()
+        return True
 
     def _apply_changes_to_graph(self):
         self.plot_ctrl.update()
