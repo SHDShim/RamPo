@@ -380,6 +380,9 @@ class PeakFitController(object):
 
     def conduct_fitting(self):
         self.release_mouse_from_peak_input()
+        main_ctrl = getattr(self.widget, "_main_controller", None)
+        if main_ctrl is not None and hasattr(main_ctrl, "_set_mouse_mode"):
+            main_ctrl._set_mouse_mode('navigate')
         if not self.model.current_section_exist():
             QtWidgets.QMessageBox.warning(
                 self.widget, "Warning", "No section is defined")

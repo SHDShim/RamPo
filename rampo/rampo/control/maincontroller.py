@@ -504,6 +504,8 @@ class MainController(object):
 
     def _set_mouse_mode(self, mode):
         if mode == self._mouse_mode:
+            self._set_mouse_mode_button_state(mode)
+            self._sync_peakpick_button(mode == 'peakpick')
             if mode == 'navigate':
                 self._set_toolbar_zoom_active(True)
             return
@@ -1704,6 +1706,7 @@ class MainController(object):
 
     def _on_fit_bg_clicked(self):
         self.deactivate_background_area_selector()
+        self._set_mouse_mode('navigate')
         if not self.get_background_fit_areas():
             QtWidgets.QMessageBox.warning(
                 self.widget,
