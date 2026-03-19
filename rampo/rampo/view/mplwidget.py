@@ -40,6 +40,7 @@ class MplCanvas(FigureCanvasQTAgg):
         super().__init__(self.fig)
         self.setSizePolicy(QtWidgets.QSizePolicy.Expanding, QtWidgets.QSizePolicy.Expanding)
         self.updateGeometry()
+        self.show_empty_state(draw=False)
 
     def _define_axes(self, h_ccd):
         self.gs = GridSpec(100, 1)
@@ -119,6 +120,21 @@ class MplCanvas(FigureCanvasQTAgg):
         except Exception:
             pass
 
+    def show_empty_state(self, draw=True):
+        self.fig.clf()
+        self._define_axes(1)
+        self.fig.set_facecolor(self.figureColor)
+        self.fig.set_edgecolor(self.figureColor)
+        for ax in (self.ax_pattern, self.ax_ccd):
+            ax.clear()
+            ax.set_facecolor(self.bgColor)
+            ax.set_axis_off()
+        if draw:
+            try:
+                self.draw_idle()
+            except Exception:
+                pass
+
 
 class MplWidget(QtWidgets.QWidget):
     """Widget defined in Qt Designer."""
@@ -134,13 +150,38 @@ class MplWidget(QtWidgets.QWidget):
         self.vbl.setContentsMargins(0, 0, 0, 0)
         self.vbl.setSpacing(0)
         self.ntb = NavigationToolbar(self.canvas, self)
+        self.control_bar = QtWidgets.QFrame(self)
+        self.control_bar.setObjectName("plotMouseControlBar")
+        self.control_bar.setFrameShape(QtWidgets.QFrame.NoFrame)
+        self.control_layout = QtWidgets.QHBoxLayout(self.control_bar)
+        self.control_layout.setContentsMargins(8, 6, 8, 6)
+        self.control_layout.setSpacing(8)
+        self.control_bar.hide()
         self.setStyleSheet("MplWidget, QWidget { border: 0px; }")
         self.canvas.setStyleSheet("border: 0px;")
         self.ntb.setStyleSheet("border: 0px;")
         self.vbl.addWidget(self.ntb)
+        self.vbl.addWidget(self.control_bar)
         self.vbl.addWidget(self.canvas)
         self.setLayout(self.vbl)
+        self.ntb.hide()
         self._shutdown_done = False
+
+    def add_control_widget(self, widget, stretch=0):
+        if widget is None:
+            return
+        self.control_layout.addWidget(widget, stretch)
+        self.control_bar.show()
+
+    def add_control_stretch(self, stretch=1):
+        self.control_layout.addStretch(stretch)
+        self.control_bar.show()
+
+    def insert_control_widget(self, index, widget, stretch=0):
+        if widget is None:
+            return
+        self.control_layout.insertWidget(index, widget, stretch)
+        self.control_bar.show()
 
     def shutdown(self):
         if self._shutdown_done:

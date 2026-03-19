@@ -60,6 +60,7 @@ class MapController(object):
         self._map_canvas = FigureCanvasQTAgg(self._map_fig)
         self.widget.verticalLayout_MapCanvas.addWidget(self._map_canvas, 1)
         self._map_canvas.mpl_connect("button_press_event", self._on_map_click)
+        self._draw_map()
 
     def _recreate_map_axes(self):
         if getattr(self, "_map_fig", None) is None:
@@ -113,6 +114,9 @@ class MapController(object):
             self._clear_roi_overlays()
         else:
             self.refresh_roi_overlays()
+            main_ctrl = getattr(self.widget, "_main_controller", None)
+            if main_ctrl is not None and getattr(main_ctrl, "_mouse_mode", "") == "roi":
+                QtCore.QTimer.singleShot(0, self._arm_roi_selection)
 
     def deactivate_interactions(self):
         self._disable_roi_selectors()
@@ -357,15 +361,25 @@ class MapController(object):
             return
         self._disable_roi_selectors()
         self.widget.pushButton_MapSetRoi.setChecked(True)
+        self._set_status("Draw ROI on the spectrum to define the map range.")
+        self._install_roi_selector()
+        QtCore.QTimer.singleShot(0, self._install_roi_selector)
+
+    def _install_roi_selector(self):
+        if self.widget.tabWidget.currentWidget() != self.widget.tab_Map:
+            return
+        ax = getattr(self.widget.mpl.canvas, "ax_pattern", None)
+        if ax is None:
+            return
+        self._disable_roi_selectors()
         self._selector_1d = RectangleSelector(
-            self.widget.mpl.canvas.ax_pattern,
+            ax,
             self._on_roi_1d_selected,
             useblit=True,
             button=[1],
             interactive=False,
             drag_from_anywhere=False,
         )
-        self._set_status("Draw ROI on the spectrum to define the map range.")
 
     def _disable_roi_selectors(self):
         if self._selector_1d is not None:
@@ -397,6 +411,9 @@ class MapController(object):
         self.deactivate_interactions()
         self.refresh_roi_overlays()
         self._compute_map()
+        main_ctrl = getattr(self.widget, "_main_controller", None)
+        if main_ctrl is not None and getattr(main_ctrl, "_mouse_mode", "") == "roi":
+            main_ctrl._set_mouse_mode('navigate')
 
     def _load_spectrum_xy(self, spectrum_path):
         return load_spectrum_xy(spectrum_path, self._chi_cache)

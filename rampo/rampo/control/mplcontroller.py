@@ -45,10 +45,9 @@ class MplController(object):
             
             def zoom_wrapper(*args, **kwargs):
                 result = self._original_zoom(*args, **kwargs)
-                mode_text = self._toolbar_mode_text(toolbar)
-                self._toolbar_active = bool(mode_text)
+                self._toolbar_active = False
                 # ✅ NEW: Uncheck cursor when zoom is activated
-                if mode_text == 'zoom rect':
+                if self._toolbar_mode_text(toolbar) == 'zoom rect':
                     main_ctrl = getattr(self.widget, "_main_controller", None)
                     if main_ctrl is not None and \
                             hasattr(main_ctrl, "_deactivate_plot_mouse_modes_for_toolbar"):
@@ -57,10 +56,9 @@ class MplController(object):
             
             def pan_wrapper(*args, **kwargs):
                 result = self._original_pan(*args, **kwargs)
-                mode_text = self._toolbar_mode_text(toolbar)
-                self._toolbar_active = bool(mode_text)
+                self._toolbar_active = False
                 # ✅ NEW: Uncheck cursor when pan is activated
-                if mode_text == 'pan/zoom':
+                if self._toolbar_mode_text(toolbar) == 'pan/zoom':
                     main_ctrl = getattr(self.widget, "_main_controller", None)
                     if main_ctrl is not None and \
                             hasattr(main_ctrl, "_deactivate_plot_mouse_modes_for_toolbar"):
@@ -103,6 +101,42 @@ class MplController(object):
 
     def set_diff_controller(self, diff_ctrl):
         self.diff_ctrl = diff_ctrl
+
+    def update_vertical_cursor_position(self, event):
+        cursor = getattr(self.widget, "cursor", None)
+        if cursor is None or event is None:
+            return
+        onmove = getattr(cursor, "onmove", None)
+        if callable(onmove):
+            try:
+                onmove(event)
+            except Exception:
+                pass
+
+    def clear_vertical_cursor_position(self):
+        cursor = getattr(self.widget, "cursor", None)
+        if cursor is None:
+            return
+        needs_redraw = False
+        for attr_name in ("vlines", "hlines"):
+            lines = getattr(cursor, attr_name, None)
+            if lines is None:
+                continue
+            if not isinstance(lines, (list, tuple)):
+                lines = [lines]
+            for line in lines:
+                if line is None:
+                    continue
+                try:
+                    line.set_visible(False)
+                    needs_redraw = True
+                except Exception:
+                    pass
+        if needs_redraw:
+            try:
+                self.widget.mpl.canvas.draw_idle()
+            except Exception:
+                pass
 
     def _is_spe_mode(self):
         if not self.model.base_ptn_exist():

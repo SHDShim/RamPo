@@ -364,6 +364,9 @@ class CCDController(object):
         self._set_row_roi_spin_values_from_pixels(self._row_roi_press_y, y_release)
         self._apply_row_roi_to_spectrum()
         self._deactivate_row_roi_selector()
+        main_ctrl = getattr(self.widget, "_main_controller", None)
+        if main_ctrl is not None and hasattr(main_ctrl, "_on_ccd_roi_selection_finished"):
+            main_ctrl._on_ccd_roi_selection_finished()
 
     def _event_y_to_ccd_row(self, event, ax):
         if ax is None:
@@ -438,6 +441,9 @@ class CCDController(object):
         self.widget.spinBox_CCDRowMin.blockSignals(False)
         self.widget.spinBox_CCDRowMax.blockSignals(False)
         self._apply_row_roi_to_spectrum()
+        main_ctrl = getattr(self.widget, "_main_controller", None)
+        if main_ctrl is not None and hasattr(main_ctrl, "_on_ccd_roi_selection_finished"):
+            main_ctrl._on_ccd_roi_selection_finished()
 
     """
     def load_ccd_format_file(self):

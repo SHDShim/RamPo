@@ -40,6 +40,9 @@ class MainController(object):
         self._peak_pick_press_x = None
         self._peak_pick_preview = None
         self._pending_ccd_roi_carry = None
+        self._mouse_mode = 'navigate'
+        self._syncing_mouse_mode = False
+        self._last_main_tab = None
 
         self.widget = MainWindow()
         self.widget._main_controller = self
@@ -96,6 +99,9 @@ class MainController(object):
         self.read_setting()
         
         self.connect_channel()
+        if hasattr(self.widget, "tabWidget"):
+            self._last_main_tab = self.widget.tabWidget.currentWidget()
+        self._initialize_mouse_mode()
         
         self.clip = QtWidgets.QApplication.clipboard()
 
@@ -188,7 +194,11 @@ class MainController(object):
         self.widget.mpl.canvas.mpl_connect(
             'motion_notify_event', self._on_peak_pick_motion)
         self.widget.mpl.canvas.mpl_connect(
+            'motion_notify_event', self._update_cursor_position_readout)
+        self.widget.mpl.canvas.mpl_connect(
             'button_release_event', self._on_peak_pick_release)
+        self.widget.mpl.canvas.mpl_connect(
+            'figure_leave_event', self._clear_cursor_position_readout)
         self.widget.mpl.canvas.mpl_connect(
             'key_press_event', self.on_key_press)
         self.widget.doubleSpinBox_Pressure.valueChanged.connect(
@@ -302,6 +312,9 @@ class MainController(object):
             self.apply_changes_to_graph)
         # self.widget.actionClose.triggered.connect(self.closeEvent)
         self.widget.tabWidget.currentChanged.connect(self.check_for_peakfit)
+        self.widget.tabWidget.currentChanged.connect(
+            self._refresh_mouse_mode_availability)
+        self.widget.tabWidget.currentChanged.connect(self._on_main_tab_changed)
         # self.widget.tabWidget.setTabEnabled(8, False)
         if hasattr(self.widget, "doubleSpinBox_CCDScaleMin"):
             self.widget.doubleSpinBox_CCDScaleMin.valueChanged.connect(
@@ -335,6 +348,267 @@ class MainController(object):
             lambda: self.goto_next_file('last'))
         self.widget.pushButton_FirstBasePtn.clicked.connect(
             lambda: self.goto_next_file('first'))
+        if hasattr(self.widget, "buttonGroup_MouseMode"):
+            self.widget.buttonGroup_MouseMode.buttonToggled.connect(
+                self._on_mouse_mode_button_toggled)
+
+    def _initialize_mouse_mode(self):
+        self._refresh_mouse_mode_availability()
+        self._set_mouse_mode('navigate')
+
+    def _get_toolbar(self):
+        return getattr(self.widget.mpl, "ntb", None)
+
+    def _get_toolbar_mode(self):
+        toolbar = self._get_toolbar()
+        if toolbar is None:
+            return ''
+        if hasattr(toolbar, 'mode'):
+            return toolbar.mode or ''
+        if hasattr(toolbar, '_active'):
+            return toolbar._active or ''
+        return ''
+
+    def _deactivate_toolbar_modes(self):
+        toolbar = self._get_toolbar()
+        if toolbar is None:
+            return
+        current_mode = self._get_toolbar_mode()
+        if current_mode in ('zoom rect', 'ZOOM'):
+            toolbar.zoom()
+        elif current_mode in ('pan/zoom', 'PAN'):
+            toolbar.pan()
+
+    def _set_toolbar_zoom_active(self, enabled):
+        toolbar = self._get_toolbar()
+        if toolbar is None:
+            return
+        current_mode = self._get_toolbar_mode()
+        if current_mode in ('pan/zoom', 'PAN'):
+            toolbar.pan()
+            current_mode = self._get_toolbar_mode()
+        zoom_active = current_mode in ('zoom rect', 'ZOOM')
+        if enabled and (not zoom_active):
+            toolbar.zoom()
+        elif (not enabled) and zoom_active:
+            toolbar.zoom()
+
+    def _is_map_tab_active(self):
+        return hasattr(self.widget, "tab_Map") and \
+            (self.widget.tabWidget.currentWidget() == self.widget.tab_Map)
+
+    def _is_seq_tab_active(self):
+        return hasattr(self.widget, "tab_Seq") and \
+            (self.widget.tabWidget.currentWidget() == self.widget.tab_Seq)
+
+    def _is_spectrum_tab_active(self):
+        return hasattr(self.widget, "tab_Bkgn") and \
+            (self.widget.tabWidget.currentWidget() == self.widget.tab_Bkgn)
+
+    def _fits_tab_active(self):
+        if hasattr(self.widget, "tab_PkFt"):
+            try:
+                return self.widget.tabWidget.currentWidget() == \
+                    self.widget.tab_PkFt
+            except Exception:
+                pass
+        return False
+
+    def _show_spectrum_tab(self):
+        if hasattr(self.widget, "tab_Bkgn"):
+            self.widget.tabWidget.setCurrentWidget(self.widget.tab_Bkgn)
+
+    def _roi_mode_available(self):
+        return True
+
+    def _set_mouse_mode_button_state(self, mode):
+        button_map = {
+            'navigate': getattr(self.widget, "pushButton_MouseModeZoom", None),
+            'roi': getattr(self.widget, "pushButton_MouseModeROI", None),
+            'peakpick': getattr(self.widget, "pushButton_MouseModePeakPick", None),
+        }
+        button = button_map.get(mode)
+        if button is None:
+            return
+        self._syncing_mouse_mode = True
+        button.setChecked(True)
+        self._syncing_mouse_mode = False
+
+    def _sync_peakpick_button(self, enabled):
+        if not hasattr(self.widget, "pushButton_AddRemoveFromMouse"):
+            return
+        self._syncing_mouse_mode = True
+        self.widget.pushButton_AddRemoveFromMouse.setChecked(bool(enabled))
+        self._syncing_mouse_mode = False
+
+    def _deactivate_roi_modes(self):
+        if hasattr(self, "map_ctrl") and (self.map_ctrl is not None):
+            self.map_ctrl.deactivate_interactions()
+        if hasattr(self, "seq_ctrl") and (self.seq_ctrl is not None):
+            self.seq_ctrl.deactivate_interactions()
+        if hasattr(self, "base_spectrum_ctrl") and \
+                hasattr(self.base_spectrum_ctrl, "ccd_ctrl"):
+            try:
+                self.base_spectrum_ctrl.ccd_ctrl._deactivate_row_roi_selector()
+            except Exception:
+                pass
+        self.deactivate_background_area_selector(sync_button=False)
+
+    def _refresh_mouse_mode_availability(self, *_args):
+        peakpick_available = self._fits_tab_active()
+        if hasattr(self.widget, "pushButton_MouseModePeakPick"):
+            self.widget.pushButton_MouseModePeakPick.setEnabled(
+                peakpick_available)
+        if (self._mouse_mode == 'peakpick') and (not peakpick_available):
+            self._set_mouse_mode('navigate')
+            return
+        if self._mouse_mode != 'roi':
+            return
+        if (not self._is_map_tab_active()) and (not self._is_seq_tab_active()) and \
+                (not self._is_spectrum_tab_active()):
+            self._set_mouse_mode('navigate')
+            return
+        if self._is_map_tab_active():
+            self.map_ctrl._arm_roi_selection()
+        elif self._is_seq_tab_active():
+            self.seq_ctrl._arm_roi_selection()
+        else:
+            self._arm_spectrum_roi_mode()
+
+    def _on_main_tab_changed(self, *_args):
+        current_tab = self.widget.tabWidget.currentWidget() \
+            if hasattr(self.widget, "tabWidget") else None
+        previous_tab = self._last_main_tab
+        self._last_main_tab = current_tab
+        if self._mouse_mode != 'roi':
+            return
+        leaving_spectrum = hasattr(self.widget, "tab_Bkgn") and \
+            (previous_tab == self.widget.tab_Bkgn)
+        entering_map_or_seq = (
+            (hasattr(self.widget, "tab_Map") and current_tab == self.widget.tab_Map) or
+            (hasattr(self.widget, "tab_Seq") and current_tab == self.widget.tab_Seq)
+        )
+        if leaving_spectrum and entering_map_or_seq:
+            self._set_mouse_mode('navigate')
+
+    def _arm_spectrum_roi_mode(self):
+        self._show_spectrum_tab()
+        if self.model.base_ptn_exist():
+            self.activate_background_area_selector(sync_button=False)
+        if hasattr(self, "base_spectrum_ctrl") and \
+                hasattr(self.base_spectrum_ctrl, "ccd_ctrl"):
+            try:
+                self.base_spectrum_ctrl.ccd_ctrl._activate_row_roi_selector()
+            except Exception:
+                pass
+
+    def _set_mouse_mode(self, mode):
+        if mode == self._mouse_mode:
+            if mode == 'navigate':
+                self._set_toolbar_zoom_active(True)
+            return
+        if mode == 'peakpick' and (not self._fits_tab_active()):
+            mode = 'navigate'
+
+        self._deactivate_toolbar_modes()
+        self._deactivate_roi_modes()
+        self._sync_peakpick_button(False)
+
+        if hasattr(self.widget, "checkBox_LongCursor") and \
+                self.widget.checkBox_LongCursor.isChecked():
+            self.widget.checkBox_LongCursor.setChecked(False)
+
+        self._mouse_mode = mode
+        self._set_mouse_mode_button_state(mode)
+
+        if mode == 'navigate':
+            self._set_toolbar_zoom_active(True)
+        elif mode == 'roi':
+            if self._is_map_tab_active():
+                self.map_ctrl._arm_roi_selection()
+            elif self._is_seq_tab_active():
+                self.seq_ctrl._arm_roi_selection()
+            else:
+                self._arm_spectrum_roi_mode()
+        elif mode == 'peakpick':
+            self._sync_peakpick_button(True)
+
+    def _on_mouse_mode_button_toggled(self, button, checked):
+        if self._syncing_mouse_mode or (not checked) or (button is None):
+            return
+        mode = str(button.property("mouseMode") or "navigate")
+        self._set_mouse_mode(mode)
+
+    def _on_ccd_roi_selection_finished(self):
+        if self._mouse_mode == 'roi':
+            self._set_mouse_mode('navigate')
+
+    def _plot_roi_interaction_active(self):
+        if self._background_area_selector_active():
+            return True
+        if hasattr(self, "map_ctrl") and (self.map_ctrl is not None):
+            try:
+                if self.map_ctrl.is_roi_selection_active():
+                    return True
+            except Exception:
+                pass
+        if hasattr(self, "seq_ctrl") and (self.seq_ctrl is not None):
+            try:
+                if self.seq_ctrl.is_roi_selection_active():
+                    return True
+            except Exception:
+                pass
+        if hasattr(self, "base_spectrum_ctrl") and \
+                hasattr(self.base_spectrum_ctrl, "ccd_ctrl"):
+            try:
+                if self.base_spectrum_ctrl.ccd_ctrl._row_roi_press_y is not None:
+                    return True
+                if self.base_spectrum_ctrl.ccd_ctrl._row_roi_press_cid is not None:
+                    return True
+            except Exception:
+                pass
+        return False
+
+    def _plot_mouse_gesture_active(self):
+        if self._plot_roi_interaction_active():
+            return True
+        if self._peak_picker_active():
+            return True
+        return False
+
+    def _clear_cursor_position_readout(self, _event=None):
+        if self._plot_mouse_gesture_active():
+            if hasattr(self.widget, "label_CursorPosition"):
+                self.widget.label_CursorPosition.setText("")
+            return
+        if hasattr(self, "plot_ctrl") and (self.plot_ctrl is not None):
+            self.plot_ctrl.clear_vertical_cursor_position()
+        if hasattr(self.widget, "label_CursorPosition"):
+            self.widget.label_CursorPosition.setText("")
+
+    def _update_cursor_position_readout(self, event):
+        if self._plot_mouse_gesture_active():
+            if hasattr(self.widget, "label_CursorPosition"):
+                self.widget.label_CursorPosition.setText("")
+            return
+        if hasattr(self, "plot_ctrl") and (self.plot_ctrl is not None):
+            self.plot_ctrl.update_vertical_cursor_position(event)
+        if not hasattr(self.widget, "label_CursorPosition"):
+            return
+        if (event is None) or (event.inaxes is None) or \
+                (event.xdata is None) or (event.ydata is None):
+            self._clear_cursor_position_readout()
+            return
+        formatter = getattr(event.inaxes, "format_coord", None)
+        if callable(formatter):
+            try:
+                text = formatter(event.xdata, event.ydata)
+            except Exception:
+                text = ""
+        else:
+            text = ""
+        text = str(text).replace("\n", " ").strip()
+        self.widget.label_CursorPosition.setText(text)
 
     def _on_long_cursor_changed(self, state):
         """Deactivate pan/zoom when vertical cursor is enabled"""
@@ -1051,34 +1325,50 @@ class MainController(object):
         self.plot_ctrl.update()
 
     def deliver_mouse_signal(self, event):
-        # Map ROI selection uses mouse drag on the main plot/ccd axes.
-        # Suppress default click handling (position popup / peak pick)
-        # while ROI selector is active.
-        if hasattr(self, "map_ctrl") and (self.map_ctrl is not None):
-            try:
-                if self.map_ctrl.is_roi_selection_active():
-                    return
-            except Exception:
-                pass
-        if hasattr(self, "seq_ctrl") and (self.seq_ctrl is not None):
-            try:
-                if self.seq_ctrl.is_roi_selection_active():
-                    return
-            except Exception:
-                pass
-        # ✅ Compatible with matplotlib 3.3+
+        if event is None or event.inaxes is None:
+            return
+        if event.button not in (1, 3):
+            return
+        ax_pattern = getattr(self.widget.mpl.canvas, "ax_pattern", None)
+        ax_ccd = getattr(self.widget.mpl.canvas, "ax_ccd", None)
+
+        if (event.button == 3) and (event.inaxes == ax_pattern):
+            if self._is_map_tab_active():
+                try:
+                    self.map_ctrl._set_default_1d_full_range_roi()
+                    self.map_ctrl.refresh_roi_overlays()
+                    self.map_ctrl._compute_map()
+                except Exception:
+                    pass
+                return
+            if self._is_seq_tab_active():
+                try:
+                    self.seq_ctrl._set_default_1d_full_range_roi()
+                    self.seq_ctrl.refresh_roi_overlays()
+                    self.seq_ctrl._compute_sequence()
+                except Exception:
+                    pass
+                return
+
+        if self._mouse_mode == 'roi':
+            if (event.button == 3) and (event.inaxes == ax_pattern):
+                self._remove_background_area_at_x(event.xdata)
+                return
+            if (event.button == 3) and (event.inaxes == ax_ccd):
+                if hasattr(self, "base_spectrum_ctrl") and \
+                        hasattr(self.base_spectrum_ctrl, "ccd_ctrl"):
+                    self.base_spectrum_ctrl.ccd_ctrl._reset_row_roi_to_full()
+                return
+
         if self._toolbar_mode_text(self.widget.mpl.ntb):
             return
         if (event.xdata is None) or (event.ydata is None):
             return
-        # Peak add/remove must come from the main 1D pattern axes.
-        if event.inaxes != self.widget.mpl.canvas.ax_pattern:
+        if event.inaxes != ax_pattern:
             return
-        if (event.button != 1) and (event.button != 3):
+        if self._mouse_mode != 'peakpick':
             return
         if self._background_area_selector_active():
-            if event.button == 3:
-                self._remove_background_area_at_x(event.xdata)
             return
         fits_active = False
         if hasattr(self.widget, "tab_PkFt"):
@@ -1087,8 +1377,7 @@ class MainController(object):
             # Backward-compatible fallback for older/newer tab orders.
             fits_active = (self.widget.tabWidget.currentIndex() in (4, 5))
 
-        if fits_active and \
-                (self.widget.pushButton_AddRemoveFromMouse.isChecked()):
+        if fits_active and (self._mouse_mode == 'peakpick'):
             if not self.model.current_section_exist():
                 QtWidgets.QMessageBox.warning(
                     self.widget, "Warning", "Set section first.")
@@ -1113,29 +1402,20 @@ class MainController(object):
                 return
             self._peak_pick_press_x = float(event.xdata)
             self._update_peak_pick_preview(float(event.xdata))
-        else:
-            return
 
     def _peak_picker_active(self):
-        if not hasattr(self.widget, "pushButton_AddRemoveFromMouse"):
-            return False
-        if not self.widget.pushButton_AddRemoveFromMouse.isChecked():
-            return False
         if not hasattr(self.widget, "tab_PkFt"):
             return False
-        return self.widget.tabWidget.currentWidget() == self.widget.tab_PkFt
+        return (self._mouse_mode == 'peakpick') and \
+            (self.widget.tabWidget.currentWidget() == self.widget.tab_PkFt)
 
     def _on_peak_picker_toggled(self, checked):
+        if self._syncing_mouse_mode:
+            return
         if checked:
-            toolbar = getattr(self.widget.mpl, "ntb", None)
-            if toolbar is not None:
-                mode = getattr(toolbar, "mode", "") or getattr(toolbar, "_active", "")
-                if mode in ("zoom rect", "ZOOM"):
-                    toolbar.zoom()
-                elif mode in ("pan/zoom", "PAN"):
-                    toolbar.pan()
-        else:
-            self._reset_peak_pick_gesture()
+            self._set_mouse_mode('peakpick')
+        elif self._mouse_mode == 'peakpick':
+            self._set_mouse_mode('navigate')
 
     def _on_peak_pick_motion(self, event):
         if not self._peak_picker_active():
@@ -1662,6 +1942,73 @@ class MainController(object):
                     float(item_max.data(QtCore.Qt.UserRole)),
                     source_is_wavenumber=False)
         self._set_background_table_unit_property(target_is_wavenumber)
+        self._prune_background_fit_areas_to_current_range(
+            target_is_wavenumber=target_is_wavenumber)
+
+    def _get_current_spectrum_x_range(self, target_is_wavenumber=None):
+        if not self.model.base_ptn_exist():
+            return None
+        x_values = None
+        if self._spectrum_unit_conversion_supported():
+            x_values = getattr(self.model.base_ptn, "x_wavelength_raw", None)
+        if x_values is None or len(x_values) == 0:
+            x_values = getattr(self.model.base_ptn, "x_raw", None)
+        if x_values is None or len(x_values) == 0:
+            return None
+        x_arr = np.asarray(x_values, dtype=float)
+        finite = x_arr[np.isfinite(x_arr)]
+        if finite.size == 0:
+            return None
+        xmin = float(np.nanmin(finite))
+        xmax = float(np.nanmax(finite))
+        target_is_wavenumber = self.spectrum_uses_wavenumber() \
+            if target_is_wavenumber is None else bool(target_is_wavenumber)
+        if self._spectrum_unit_conversion_supported():
+            xmin = self._convert_spectrum_x_value(xmin, False, target_is_wavenumber)
+            xmax = self._convert_spectrum_x_value(xmax, False, target_is_wavenumber)
+        if xmax < xmin:
+            xmin, xmax = xmax, xmin
+        return [xmin, xmax]
+
+    def _background_area_within_current_range(self, xmin, xmax, target_is_wavenumber=None):
+        target_is_wavenumber = self.spectrum_uses_wavenumber() \
+            if target_is_wavenumber is None else bool(target_is_wavenumber)
+        x_range = self._get_current_spectrum_x_range(target_is_wavenumber=False)
+        if x_range is None:
+            return True
+        xmin_cmp = float(xmin)
+        xmax_cmp = float(xmax)
+        if self._spectrum_unit_conversion_supported():
+            xmin_cmp = self._convert_spectrum_x_value(
+                xmin_cmp, target_is_wavenumber, False)
+            xmax_cmp = self._convert_spectrum_x_value(
+                xmax_cmp, target_is_wavenumber, False)
+        if xmax_cmp < xmin_cmp:
+            xmin_cmp, xmax_cmp = xmax_cmp, xmin_cmp
+        tol = max(abs(x_range[1] - x_range[0]), 1.0) * 1.0e-9
+        return (xmin_cmp >= (x_range[0] - tol)) and \
+            (xmax_cmp <= (x_range[1] + tol))
+
+    def _prune_background_fit_areas_to_current_range(self, target_is_wavenumber=None):
+        table = getattr(self.widget, "tableWidget_BackgroundConstraints", None)
+        if table is None:
+            return False
+        target_is_wavenumber = self.spectrum_uses_wavenumber() \
+            if target_is_wavenumber is None else bool(target_is_wavenumber)
+        removed = False
+        for row in range(table.rowCount() - 1, -1, -1):
+            area = self._read_background_area_row(
+                row, target_is_wavenumber=target_is_wavenumber)
+            if area is None:
+                table.removeRow(row)
+                removed = True
+                continue
+            if not self._background_area_within_current_range(
+                    area[0], area[1],
+                    target_is_wavenumber=target_is_wavenumber):
+                table.removeRow(row)
+                removed = True
+        return removed
 
     def _get_explicit_background_fit_areas(self):
         areas = []
@@ -1700,6 +2047,7 @@ class MainController(object):
             return
         table.setRowCount(0)
         normalized = []
+        target_is_wavenumber = self.spectrum_uses_wavenumber()
         for area in (areas or []):
             try:
                 xmin = float(area[0])
@@ -1709,6 +2057,9 @@ class MainController(object):
             if xmax < xmin:
                 xmin, xmax = xmax, xmin
             if self._is_legacy_full_range_background_area(xmin, xmax):
+                continue
+            if not self._background_area_within_current_range(
+                    xmin, xmax, target_is_wavenumber=target_is_wavenumber):
                 continue
             normalized.append([xmin, xmax])
         normalized.sort(key=lambda area: area[0])
@@ -1721,18 +2072,24 @@ class MainController(object):
         table = getattr(self.widget, "tableWidget_BackgroundConstraints", None)
         if table is None:
             return
+        source_is_wavenumber = self.spectrum_uses_wavenumber()
         xmin = float(xmin)
         xmax = float(xmax)
         if xmax < xmin:
             xmin, xmax = xmax, xmin
         if abs(xmax - xmin) < 1.0e-9:
             return
+        if not self._background_area_within_current_range(
+                xmin, xmax,
+                target_is_wavenumber=source_is_wavenumber):
+            return
         for area in self._get_explicit_background_fit_areas():
             if abs(area[0] - xmin) < 1.0e-6 and abs(area[1] - xmax) < 1.0e-6:
                 return
         row = table.rowCount()
         table.insertRow(row)
-        self._set_background_area_row(row, xmin, xmax)
+        self._set_background_area_row(
+            row, xmin, xmax, source_is_wavenumber=source_is_wavenumber)
         table.sortItems(0)
 
     def toggle_background_area_selector(self, checked):
@@ -1741,7 +2098,8 @@ class MainController(object):
         else:
             self.deactivate_background_area_selector()
 
-    def activate_background_area_selector(self):
+    def activate_background_area_selector(self, sync_button=True):
+        del sync_button
         if not self.model.base_ptn_exist():
             if hasattr(self.widget, "pushButton_BGAreaAdd"):
                 self.widget.pushButton_BGAreaAdd.blockSignals(True)
@@ -1749,9 +2107,6 @@ class MainController(object):
                 self.widget.pushButton_BGAreaAdd.blockSignals(False)
                 if hasattr(self.widget, "_sync_bg_area_add_button_text"):
                     self.widget._sync_bg_area_add_button_text(False)
-            return
-        ax = getattr(self.widget.mpl.canvas, "ax_pattern", None)
-        if ax is None:
             return
         self.deactivate_background_area_selector(sync_button=False)
         toolbar = getattr(self.widget.mpl.canvas, "toolbar", None)
@@ -1763,6 +2118,10 @@ class MainController(object):
                     toolbar.pan()
             except Exception:
                 pass
+        self.plot_ctrl.update()
+        ax = getattr(self.widget.mpl.canvas, "ax_pattern", None)
+        if ax is None:
+            return
         self._bg_area_selector = RectangleSelector(
             ax,
             self._on_background_area_selected,
@@ -1777,7 +2136,6 @@ class MainController(object):
             self.widget.mpl.canvas.setCursor(QtCore.Qt.CrossCursor)
         except Exception:
             pass
-        self.plot_ctrl.update()
 
     def deactivate_background_area_selector(self, sync_button=True):
         if self._bg_area_selector is not None:
@@ -1800,6 +2158,8 @@ class MainController(object):
     def _background_area_selector_active(self):
         if self._bg_area_selector is None:
             return False
+        if self._mouse_mode == 'roi':
+            return True
         if not hasattr(self.widget, "pushButton_BGAreaAdd"):
             return False
         return bool(self.widget.pushButton_BGAreaAdd.isChecked())

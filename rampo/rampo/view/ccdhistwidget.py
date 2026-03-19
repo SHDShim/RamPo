@@ -42,6 +42,7 @@ class CCDHistogramWidget(QtWidgets.QWidget):
         self.ax = self.fig.add_subplot(111)
         self.fig.subplots_adjust(left=0.055, right=0.99, top=0.97, bottom=0.28)
         self._style_axes()
+        self.show_empty_state(draw=False)
 
         self.label_low = QtWidgets.QLabel("Low %")
         self.label_high = QtWidgets.QLabel("High %")
@@ -82,9 +83,7 @@ class CCDHistogramWidget(QtWidgets.QWidget):
             arr = np.asarray(values, dtype=float).ravel()
         arr = arr[np.isfinite(arr)]
         if arr.size == 0:
-            self.ax.clear()
-            self._style_axes(xlabel="Intensity histogram (no data)")
-            self.canvas.draw_idle()
+            self.show_empty_state()
             return
 
         self._data = arr
@@ -214,3 +213,17 @@ class CCDHistogramWidget(QtWidgets.QWidget):
         self.ax.spines["left"].set_color("white")
         self.ax.spines["right"].set_color("white")
         self.ax.spines["top"].set_color("white")
+
+    def show_empty_state(self, draw=True):
+        self._data = None
+        self._vmin = None
+        self._vmax = None
+        self._xlims = None
+        self._line_min = None
+        self._line_max = None
+        self._drag_target = None
+        self.ax.clear()
+        self.ax.set_facecolor("black")
+        self.ax.set_axis_off()
+        if draw:
+            self.canvas.draw_idle()

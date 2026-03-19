@@ -145,25 +145,31 @@ class MainWindow(QtWidgets.QMainWindow, Ui_MainWindow):
         self._reorder_main_tabs_and_fit_tab_names()
         self._setup_toolbar_ccd_reset_button()
         self._setup_toolbar_diff_toggle()
+        self._setup_mouse_mode_selector()
+        self._move_mouse_controls_to_plot_bar()
+        self._rebuild_top_toolbar()
         self._spread_top_toolbar_even()
         if hasattr(self, "pushButton_S_Zoom"):
             self.pushButton_S_Zoom.setText("⤢")
             self.pushButton_S_Zoom.setToolTip("Fit X/Y to data (zoom out)")
+            self._set_flat_toolbar_button_style(
+                self.pushButton_S_Zoom, compact=True)
         if hasattr(self, "checkBox_BgSub"):
             self.checkBox_BgSub.setText("BgSub")
             self.checkBox_BgSub.setToolTip("Subtract background from 1D pattern")
         if hasattr(self, "checkBox_ShowBg"):
             self.checkBox_ShowBg.setText("Bg show")
             self.checkBox_ShowBg.setToolTip("Show fitted background")
+        if hasattr(self, "checkBox_AutoY"):
+            self.checkBox_AutoY.setText("Y,Z auto")
+            self.checkBox_AutoY.setToolTip(
+                "Auto-scale both 1D intensity and 2D CCD contrast")
         if hasattr(self, "checkBox_ShowCCD"):
             self.checkBox_ShowCCD.setChecked(True)
             self.checkBox_ShowCCD.setVisible(False)
         if hasattr(self, "checkBox_LongCursor"):
-            self.checkBox_LongCursor.setText("VCursor")
+            self.checkBox_LongCursor.setText("V cur")
             self.checkBox_LongCursor.setToolTip("Change cursor to a vertical bar")
-        # Legacy toolbar save icon is replaced by the session Save button.
-        if hasattr(self, "pushButton_S_SaveSession"):
-            self.pushButton_S_SaveSession.setVisible(False)
         for name in ("pushButton_S_PIncrease", "pushButton_S_PDecrease"):
             if hasattr(self, name):
                 btn = getattr(self, name)
@@ -895,13 +901,16 @@ class MainWindow(QtWidgets.QMainWindow, Ui_MainWindow):
         self.pushButton_CCDFullRoi.setObjectName("pushButton_CCDFullRoi")
         self.pushButton_CCDFullRoi.setMinimumHeight(25)
         self.pushButton_CCDFullRoi.setMaximumHeight(25)
+        self.pushButton_CCDFullRoi.setSizePolicy(
+            QtWidgets.QSizePolicy.Expanding, QtWidgets.QSizePolicy.Fixed)
         self.gridLayout_CCDRoi.addWidget(self.label_CCDRowMin, 0, 0, 1, 1)
         self.gridLayout_CCDRoi.addWidget(self.spinBox_CCDRowMin, 0, 1, 1, 1)
         self.gridLayout_CCDRoi.addWidget(self.label_CCDRowMax, 0, 2, 1, 1)
         self.gridLayout_CCDRoi.addWidget(self.spinBox_CCDRowMax, 0, 3, 1, 1)
-        self.gridLayout_CCDRoi.addWidget(self.pushButton_CCDSelectRoi, 1, 0, 1, 2)
-        self.gridLayout_CCDRoi.addWidget(self.pushButton_CCDFullRoi, 1, 2, 1, 2)
+        self.gridLayout_CCDRoi.addWidget(self.pushButton_CCDFullRoi, 1, 0, 1, 4)
+        self.gridLayout_CCDRoi.setColumnStretch(0, 1)
         self.gridLayout_CCDRoi.setColumnStretch(1, 1)
+        self.gridLayout_CCDRoi.setColumnStretch(2, 1)
         self.gridLayout_CCDRoi.setColumnStretch(3, 1)
         insert_idx = self.verticalLayout_21.count()
         if hasattr(self, "groupBox_SpectrumSmooth"):
@@ -1206,10 +1215,16 @@ class MainWindow(QtWidgets.QMainWindow, Ui_MainWindow):
             border_color="#ef4444")
         self.pushButton_MapClearRoi.setMinimumHeight(28)
         self.pushButton_MapClearRoi.setMaximumHeight(28)
+        self.pushButton_MapClearRoi.setSizePolicy(
+            QtWidgets.QSizePolicy.Expanding, QtWidgets.QSizePolicy.Fixed)
         self.pushButton_MapSetRoi.setMinimumHeight(28)
         self.pushButton_MapSetRoi.setMaximumHeight(28)
+        self.pushButton_MapSetRoi.setSizePolicy(
+            QtWidgets.QSizePolicy.Expanding, QtWidgets.QSizePolicy.Fixed)
         self.pushButton_MapCompute.setMinimumHeight(28)
         self.pushButton_MapCompute.setMaximumHeight(28)
+        self.pushButton_MapCompute.setSizePolicy(
+            QtWidgets.QSizePolicy.Expanding, QtWidgets.QSizePolicy.Fixed)
         self.lineEdit_MapRoiSummary = QtWidgets.QLineEdit(self.groupBox_MapRoi)
         self.lineEdit_MapRoiSummary.setObjectName("lineEdit_MapRoiSummary")
         self.lineEdit_MapRoiSummary.setReadOnly(True)
@@ -1436,10 +1451,16 @@ class MainWindow(QtWidgets.QMainWindow, Ui_MainWindow):
             border_color="#ef4444")
         self.pushButton_SeqClearRoi.setMinimumHeight(28)
         self.pushButton_SeqClearRoi.setMaximumHeight(28)
+        self.pushButton_SeqClearRoi.setSizePolicy(
+            QtWidgets.QSizePolicy.Expanding, QtWidgets.QSizePolicy.Fixed)
         self.pushButton_SeqSetRoi.setMinimumHeight(28)
         self.pushButton_SeqSetRoi.setMaximumHeight(28)
+        self.pushButton_SeqSetRoi.setSizePolicy(
+            QtWidgets.QSizePolicy.Expanding, QtWidgets.QSizePolicy.Fixed)
         self.pushButton_SeqCompute.setMinimumHeight(28)
         self.pushButton_SeqCompute.setMaximumHeight(28)
+        self.pushButton_SeqCompute.setSizePolicy(
+            QtWidgets.QSizePolicy.Expanding, QtWidgets.QSizePolicy.Fixed)
         self.lineEdit_SeqRoiSummary = QtWidgets.QLineEdit(self.groupBox_SeqRoi)
         self.lineEdit_SeqRoiSummary.setObjectName("lineEdit_SeqRoiSummary")
         self.lineEdit_SeqRoiSummary.setReadOnly(True)
@@ -1553,6 +1574,291 @@ class MainWindow(QtWidgets.QMainWindow, Ui_MainWindow):
             self.horizontalLayout_7.insertWidget(idx_showbg + 1, self.checkBox_Diff)
         else:
             self.horizontalLayout_7.addWidget(self.checkBox_Diff)
+
+    def _set_flat_toolbar_button_style(self, button, compact=False):
+        button.setFlat(True)
+        button.setAutoDefault(False)
+        button.setDefault(False)
+        if compact:
+            button.setMinimumWidth(44)
+            button.setMaximumWidth(88)
+            padding = "2px 8px"
+            font_weight = "600"
+        else:
+            padding = "3px 14px"
+            font_weight = "500"
+        button.setStyleSheet(
+            "QPushButton {"
+            "background-color: rgba(255, 255, 255, 0.045);"
+            "color: #f2f2f2;"
+            "border: 1px solid rgba(255, 255, 255, 0.08);"
+            "border-radius: 6px;"
+            f"padding: {padding};"
+            f"font-weight: {font_weight};"
+            "}"
+            "QPushButton:hover {"
+            "background-color: rgba(255, 255, 255, 0.085);"
+            "border: 1px solid rgba(255, 255, 255, 0.16);"
+            "}"
+            "QPushButton:pressed {"
+            "background-color: rgba(255, 255, 255, 0.13);"
+            "border: 1px solid rgba(255, 255, 255, 0.2);"
+            "}"
+            "QPushButton:focus {"
+            "outline: none;"
+            "border: 1px solid rgba(255, 255, 255, 0.18);"
+            "}"
+        )
+
+    def _set_colored_flat_toolbar_button_style(
+            self, button, base_color, hover_color, pressed_color,
+            border_color, text_color="#1f1f1f", compact=False):
+        button.setFlat(True)
+        button.setAutoDefault(False)
+        button.setDefault(False)
+        if compact:
+            button.setMinimumWidth(44)
+            button.setMaximumWidth(88)
+            padding = "2px 8px"
+            font_weight = "600"
+        else:
+            padding = "3px 14px"
+            font_weight = "500"
+        button.setStyleSheet(
+            "QPushButton {"
+            f"background-color: {base_color};"
+            f"color: {text_color};"
+            f"border: 1px solid {border_color};"
+            "border-radius: 6px;"
+            f"padding: {padding};"
+            f"font-weight: {font_weight};"
+            "}"
+            "QPushButton:hover {"
+            f"background-color: {hover_color};"
+            f"border: 1px solid {border_color};"
+            "}"
+            "QPushButton:pressed {"
+            f"background-color: {pressed_color};"
+            f"border: 1px solid {border_color};"
+            "}"
+            "QPushButton:focus {"
+            "outline: none;"
+            f"border: 1px solid {border_color};"
+            "}"
+        )
+
+    def _set_button_height(self, button, height=28):
+        button.setMinimumHeight(height)
+        button.setMaximumHeight(height)
+
+    def _set_mouse_mode_button_style(self, button, checked_color,
+                                     hover_color, pressed_color,
+                                     border_color, segment="middle",
+                                     text_color="white"):
+        if segment == "left":
+            radius_rule = "border-top-left-radius: 6px; border-bottom-left-radius: 6px; border-top-right-radius: 0px; border-bottom-right-radius: 0px;"
+        elif segment == "right":
+            radius_rule = "border-top-left-radius: 0px; border-bottom-left-radius: 0px; border-top-right-radius: 6px; border-bottom-right-radius: 6px;"
+        elif segment == "single":
+            radius_rule = "border-radius: 6px;"
+        else:
+            radius_rule = "border-radius: 0px;"
+        button.setStyleSheet(
+            "QPushButton {"
+            "background-color: #eee8dc;"
+            "color: #2a241f;"
+            "border: 1px solid #b8ada0;"
+            f"{radius_rule}"
+            "padding: 2px 14px;"
+            "font-weight: 600;"
+            "}"
+            "QPushButton:hover {"
+            "background-color: #e3dbcf;"
+            "}"
+            "QPushButton:pressed {"
+            f"background-color: {pressed_color};"
+            f"color: {text_color};"
+            "}"
+            "QPushButton:checked {"
+            f"background-color: {checked_color};"
+            f"color: {text_color};"
+            f"border: 1px solid {border_color};"
+            "}"
+            "QPushButton:checked:hover {"
+            f"background-color: {hover_color};"
+            "}"
+        )
+
+    def _setup_mouse_mode_selector(self):
+        if (not hasattr(self, "horizontalLayout_7")) or \
+                hasattr(self, "buttonGroup_MouseMode"):
+            return
+        self.pushButton_MouseModeZoom = QtWidgets.QPushButton("Zoom", self.frame_2)
+        self.pushButton_MouseModeROI = QtWidgets.QPushButton("ROI", self.frame_2)
+        self.pushButton_MouseModePeakPick = QtWidgets.QPushButton("Peak", self.frame_2)
+
+        self.buttonGroup_MouseMode = QtWidgets.QButtonGroup(self)
+        self.buttonGroup_MouseMode.setExclusive(True)
+
+        for button, mode_name in (
+            (self.pushButton_MouseModeZoom, "navigate"),
+            (self.pushButton_MouseModeROI, "roi"),
+            (self.pushButton_MouseModePeakPick, "peakpick"),
+        ):
+            button.setObjectName(f"pushButton_MouseMode_{mode_name}")
+            button.setCheckable(True)
+            button.setProperty("mouseMode", mode_name)
+            self._set_button_height(button)
+            self.buttonGroup_MouseMode.addButton(button)
+
+        self.pushButton_MouseModeZoom.setToolTip("Default navigation and zoom mode")
+        self.pushButton_MouseModeROI.setToolTip("ROI mode for Map/Seq or Spectrum background and CCD")
+        self.pushButton_MouseModePeakPick.setToolTip("Peak picking mode in PeakFit")
+
+        self._set_mouse_mode_button_style(
+            self.pushButton_MouseModeZoom,
+            "#d6a800", "#e0b31b", "#b88f00", "#8f6f00",
+            segment="left",
+            text_color="#1f1f1f")
+        self._set_mouse_mode_button_style(
+            self.pushButton_MouseModeROI,
+            "#d6a800", "#e0b31b", "#b88f00", "#8f6f00",
+            segment="middle",
+            text_color="#1f1f1f")
+        self._set_mouse_mode_button_style(
+            self.pushButton_MouseModePeakPick,
+            "#c27b00", "#d98b00", "#9a6100", "#7c4d00",
+            segment="right",
+            text_color="#1f1f1f")
+
+        insert_idx = self.horizontalLayout_7.indexOf(self.checkBox_AutoY)
+        if insert_idx < 0:
+            insert_idx = 0
+        self.horizontalLayout_7.insertWidget(insert_idx, self.pushButton_MouseModeZoom)
+        self.horizontalLayout_7.insertWidget(insert_idx + 1, self.pushButton_MouseModeROI)
+        self.horizontalLayout_7.insertWidget(insert_idx + 2, self.pushButton_MouseModePeakPick)
+        self.pushButton_MouseModeZoom.setChecked(True)
+
+    def _move_mouse_controls_to_plot_bar(self):
+        if (not hasattr(self, "mpl")) or \
+                (not hasattr(self.mpl, "add_control_widget")):
+            return
+        self.frame_MouseModeGroup = QtWidgets.QFrame(self.mpl.control_bar)
+        self.frame_MouseModeGroup.setObjectName("frame_MouseModeGroup")
+        self.layout_MouseModeGroup = QtWidgets.QHBoxLayout(self.frame_MouseModeGroup)
+        self.layout_MouseModeGroup.setContentsMargins(0, 0, 0, 0)
+        self.layout_MouseModeGroup.setSpacing(0)
+        self.label_CursorPosition = QtWidgets.QLabel("", self.mpl.control_bar)
+        self.label_CursorPosition.setObjectName("label_CursorPosition")
+        self.label_CursorPosition.setMinimumHeight(25)
+        self.label_CursorPosition.setAlignment(
+            QtCore.Qt.AlignRight | QtCore.Qt.AlignVCenter)
+        self.label_CursorPosition.setSizePolicy(
+            QtWidgets.QSizePolicy.Expanding, QtWidgets.QSizePolicy.Fixed)
+
+        widgets = [
+            getattr(self, "checkBox_BgSub", None),
+            getattr(self, "checkBox_ShowBg", None),
+            getattr(self, "checkBox_AutoY", None),
+            getattr(self, "checkBox_LongCursor", None),
+            getattr(self, "checkBox_Diff", None),
+        ]
+        for widget in widgets:
+            if widget is None:
+                continue
+            widget.setParent(self.mpl.control_bar)
+            widget.setSizePolicy(
+                QtWidgets.QSizePolicy.Fixed, QtWidgets.QSizePolicy.Fixed)
+            self.mpl.add_control_widget(widget)
+
+        for button_name in (
+            "pushButton_MouseModeZoom",
+            "pushButton_MouseModeROI",
+            "pushButton_MouseModePeakPick",
+        ):
+            button = getattr(self, button_name, None)
+            if button is None:
+                continue
+            button.setParent(self.frame_MouseModeGroup)
+            button.setSizePolicy(
+                QtWidgets.QSizePolicy.Preferred, QtWidgets.QSizePolicy.Fixed)
+            self.layout_MouseModeGroup.addWidget(button)
+
+        toolbar_zoom = getattr(self, "pushButton_S_Zoom", None)
+        if toolbar_zoom is not None:
+            spacer = QtWidgets.QSpacerItem(
+                8, 0,
+                QtWidgets.QSizePolicy.Fixed,
+                QtWidgets.QSizePolicy.Minimum)
+            self.layout_MouseModeGroup.addItem(spacer)
+            toolbar_zoom.setParent(self.frame_MouseModeGroup)
+            toolbar_zoom.setSizePolicy(
+                QtWidgets.QSizePolicy.Fixed, QtWidgets.QSizePolicy.Fixed)
+            self._set_button_height(toolbar_zoom)
+            self.layout_MouseModeGroup.addWidget(toolbar_zoom)
+
+        self.mpl.insert_control_widget(0, self.frame_MouseModeGroup)
+        self.mpl.add_control_stretch(1)
+        self.mpl.add_control_widget(self.label_CursorPosition, 1)
+
+    def _rebuild_top_toolbar(self):
+        if (not hasattr(self, "frame_9")) or (not hasattr(self, "horizontalLayout_21")):
+            return
+        while self.horizontalLayout_21.count():
+            item = self.horizontalLayout_21.takeAt(0)
+            w = item.widget()
+            if w is not None:
+                w.hide()
+
+        self.frame_TopToolbar = QtWidgets.QFrame(self.frame_9)
+        self.frame_TopToolbar.setObjectName("frame_TopToolbar")
+        self.layout_TopToolbar = QtWidgets.QHBoxLayout(self.frame_TopToolbar)
+        self.layout_TopToolbar.setContentsMargins(0, 0, 0, 0)
+        self.layout_TopToolbar.setSpacing(10)
+
+        row_widgets = [
+            getattr(self, "pushButton_S_PrevBasePtn", None),
+            getattr(self, "pushButton_S_NextBasePtn", None),
+            getattr(self, "pushButton_NewBasePtn", None),
+            getattr(self, "pushButton_S_SaveSession", None),
+        ]
+        for widget in row_widgets:
+            if widget is None:
+                continue
+            widget.setParent(self.frame_TopToolbar)
+            widget.show()
+            widget.setMinimumHeight(28)
+            widget.setMaximumHeight(28)
+            if widget in (
+                getattr(self, "pushButton_S_PrevBasePtn", None),
+                getattr(self, "pushButton_S_NextBasePtn", None),
+            ):
+                self._set_flat_toolbar_button_style(widget, compact=True)
+                widget.setSizePolicy(
+                    QtWidgets.QSizePolicy.Expanding, QtWidgets.QSizePolicy.Fixed)
+            elif widget == getattr(self, "pushButton_NewBasePtn", None):
+                self._set_colored_flat_toolbar_button_style(
+                    widget,
+                    "#2f8a57", "#3a9d66", "#267048", "#225f3d",
+                    text_color="#f3fff7")
+                widget.setText("Open")
+                widget.setSizePolicy(
+                    QtWidgets.QSizePolicy.Expanding, QtWidgets.QSizePolicy.Fixed)
+            else:
+                self._set_colored_flat_toolbar_button_style(
+                    widget,
+                    "#d6a800", "#e0b31b", "#b88f00", "#8f6f00",
+                    text_color="#1f1f1f")
+                widget.setText("Save")
+                widget.setSizePolicy(
+                    QtWidgets.QSizePolicy.Expanding, QtWidgets.QSizePolicy.Fixed)
+            widget.setMinimumWidth(0)
+            widget.setMaximumWidth(16777215)
+            self.layout_TopToolbar.addWidget(widget, 1)
+
+        self.horizontalLayout_21.addWidget(self.frame_TopToolbar)
+        if hasattr(self, "frame_2"):
+            self.frame_2.setVisible(False)
 
     def _spread_top_toolbar_even(self):
         if not hasattr(self, "horizontalLayout_7"):
@@ -1951,6 +2257,45 @@ class MainWindow(QtWidgets.QMainWindow, Ui_MainWindow):
         if hasattr(self, "pushButton_NewBasePtn"):
             self.pushButton_NewBasePtn.setText("Open SPE")
             self.pushButton_NewBasePtn.setToolTip("Open SPE or CHI spectrum file")
+        if hasattr(self, "pushButton_BGAreaAdd"):
+            self.pushButton_BGAreaAdd.setVisible(False)
+        if hasattr(self, "label_BGAreaHelp"):
+            self.label_BGAreaHelp.setText(
+                "ROI mode: drag on the 1D spectrum to add background areas. Right click near a yellow area to remove it.")
+        if hasattr(self, "pushButton_CCDSelectRoi"):
+            self.pushButton_CCDSelectRoi.setVisible(False)
+        if hasattr(self, "pushButton_MapSetRoi"):
+            self.pushButton_MapSetRoi.setVisible(False)
+            if hasattr(self, "gridLayout_MapRoi"):
+                self.gridLayout_MapRoi.removeWidget(self.pushButton_MapSetRoi)
+        if hasattr(self, "pushButton_MapClearRoi") and hasattr(self, "gridLayout_MapRoi"):
+            self.gridLayout_MapRoi.removeWidget(self.pushButton_MapClearRoi)
+            self.gridLayout_MapRoi.addWidget(self.pushButton_MapClearRoi, 0, 0, 1, 1)
+        if hasattr(self, "pushButton_MapCompute") and hasattr(self, "gridLayout_MapRoi"):
+            self.gridLayout_MapRoi.removeWidget(self.pushButton_MapCompute)
+            self.gridLayout_MapRoi.addWidget(self.pushButton_MapCompute, 0, 1, 1, 1)
+        if hasattr(self, "lineEdit_MapRoiSummary") and hasattr(self, "gridLayout_MapRoi"):
+            self.gridLayout_MapRoi.removeWidget(self.lineEdit_MapRoiSummary)
+            self.gridLayout_MapRoi.addWidget(self.lineEdit_MapRoiSummary, 1, 0, 1, 2)
+            self.gridLayout_MapRoi.setColumnStretch(0, 1)
+            self.gridLayout_MapRoi.setColumnStretch(1, 1)
+            self.gridLayout_MapRoi.setColumnStretch(2, 0)
+        if hasattr(self, "pushButton_SeqSetRoi"):
+            self.pushButton_SeqSetRoi.setVisible(False)
+            if hasattr(self, "gridLayout_SeqRoi"):
+                self.gridLayout_SeqRoi.removeWidget(self.pushButton_SeqSetRoi)
+        if hasattr(self, "pushButton_SeqClearRoi") and hasattr(self, "gridLayout_SeqRoi"):
+            self.gridLayout_SeqRoi.removeWidget(self.pushButton_SeqClearRoi)
+            self.gridLayout_SeqRoi.addWidget(self.pushButton_SeqClearRoi, 0, 0, 1, 1)
+        if hasattr(self, "pushButton_SeqCompute") and hasattr(self, "gridLayout_SeqRoi"):
+            self.gridLayout_SeqRoi.removeWidget(self.pushButton_SeqCompute)
+            self.gridLayout_SeqRoi.addWidget(self.pushButton_SeqCompute, 0, 1, 1, 1)
+        if hasattr(self, "lineEdit_SeqRoiSummary") and hasattr(self, "gridLayout_SeqRoi"):
+            self.gridLayout_SeqRoi.removeWidget(self.lineEdit_SeqRoiSummary)
+            self.gridLayout_SeqRoi.addWidget(self.lineEdit_SeqRoiSummary, 1, 0, 1, 2)
+            self.gridLayout_SeqRoi.setColumnStretch(0, 1)
+            self.gridLayout_SeqRoi.setColumnStretch(1, 1)
+            self.gridLayout_SeqRoi.setColumnStretch(2, 0)
         if hasattr(self, "groupBox_3"):
             self.groupBox_3.setTitle("Spectrum")
         if hasattr(self, "tabWidget") and hasattr(self, "tab_Bkgn"):
@@ -2007,32 +2352,8 @@ class MainWindow(QtWidgets.QMainWindow, Ui_MainWindow):
             self.pushButton_UpdateBackground.setVisible(False)
         if hasattr(self, "pushButton_ResetCCDScale"):
             self.pushButton_ResetCCDScale.setToolTip("Reset CCD contrast scale")
-        if hasattr(self, "pushButton_AddRemoveFromMouse"):
-            self.pushButton_AddRemoveFromMouse.setText("Pick peaks")
-            self.pushButton_AddRemoveFromMouse.setToolTip(
-                "Left click to add a peak, left drag to set peak width, right click to remove the nearest peak")
-        if hasattr(self, "groupBox_32") and hasattr(self, "gridLayout_18") and \
-                hasattr(self, "pushButton_AddRemoveFromMouse"):
-            if not hasattr(self, "label_PeakPickHelp"):
-                self.label_PeakPickHelp = QtWidgets.QLabel(self.groupBox_32)
-                self.label_PeakPickHelp.setObjectName("label_PeakPickHelp")
-                self.label_PeakPickHelp.setWordWrap(True)
-                self.label_PeakPickHelp.setText(
-                    "When on: left click to add, left drag to set width, right click to remove. Toggle back to normal when done.")
-                self.label_PeakPickHelp.setStyleSheet(
-                    "color: #cbd5e1; padding-top: 2px; padding-bottom: 4px;")
-                if hasattr(self, "pushButton_AddRemoveFromJlist"):
-                    self.gridLayout_18.removeWidget(self.pushButton_AddRemoveFromJlist)
-                    self.gridLayout_18.addWidget(
-                        self.pushButton_AddRemoveFromJlist, 3, 0, 1, 1)
-                if hasattr(self, "label_16"):
-                    self.gridLayout_18.removeWidget(self.label_16)
-                    self.gridLayout_18.addWidget(self.label_16, 3, 2, 1, 1)
-                if hasattr(self, "spinBox_PeaksFromJlistIntensity"):
-                    self.gridLayout_18.removeWidget(self.spinBox_PeaksFromJlistIntensity)
-                    self.gridLayout_18.addWidget(
-                        self.spinBox_PeaksFromJlistIntensity, 3, 3, 1, 1)
-                self.gridLayout_18.addWidget(self.label_PeakPickHelp, 2, 0, 1, 4)
+        if hasattr(self, "groupBox_32"):
+            self.groupBox_32.setVisible(False)
         if hasattr(self, "doubleSpinBox_InitialFWHM"):
             self.doubleSpinBox_InitialFWHM.setValue(2.0)
             self.doubleSpinBox_InitialFWHM.hide()
