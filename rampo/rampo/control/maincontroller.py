@@ -781,9 +781,7 @@ class MainController(object):
                 pass
 
     def plot_new_graph(self):
-        if hasattr(self.widget, "checkBox_AutoY") and \
-                self.widget.checkBox_AutoY.isChecked() and \
-                hasattr(self, "base_spectrum_ctrl") and \
+        if hasattr(self, "base_spectrum_ctrl") and \
                 hasattr(self.base_spectrum_ctrl, "ccd_ctrl"):
             try:
                 self.base_spectrum_ctrl.ccd_ctrl.apply_auto_ccd_scale(
@@ -1063,6 +1061,8 @@ class MainController(object):
             if hasattr(self.widget, attr):
                 self._load_widget_from_settings(
                     key, getattr(self.widget, attr))
+        if hasattr(self.widget, "checkBox_ShowLargePnT"):
+            self.widget.checkBox_ShowLargePnT.setChecked(False)
 
     def _plot_config_setting_bindings(self):
         return [

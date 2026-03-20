@@ -7,7 +7,7 @@ from ..model import PeakPoModel8
 from ..model.diff_state import DiffState
 from ..model.param_session_io import load_model_from_param
 from ..ds_ramspec import Spectrum
-from ..utils import readchi, writechi, get_temp_dir, open_spectrum_file_dialog
+from ..utils import readchi, open_spectrum_file_dialog
 
 
 class DiffController(object):
@@ -81,8 +81,6 @@ class DiffController(object):
         if hasattr(self.widget, "pushButton_DiffScaleToData"):
             self.widget.pushButton_DiffScaleToData.clicked.connect(
                 self._set_2d_scale_to_diff_range)
-        self.widget.pushButton_ExportDiffChi.clicked.connect(self.export_diff_chi)
-        self.widget.pushButton_ExportDiffCCDNpy.clicked.connect(self.export_diff_ccd_npy)
 
     def _init_ui_from_state(self):
         if (not hasattr(self.widget, "checkBox_Diff")) and \
@@ -683,102 +681,3 @@ class DiffController(object):
             "vmax": vmax,
             "center_zero": center_zero,
         }
-
-    def export_diff_chi(self):
-        if not self.model.base_ptn_exist():
-            return
-        # Diff export is defined against raw patterns even if Bg is checked.
-        x_cur, y_cur = self.model.base_ptn.get_raw()
-        x_out, y_out = self.get_display_pattern(x_cur, y_cur)
-        if (x_out is None) or (y_out is None):
-            QtWidgets.QMessageBox.warning(self.widget, "Warning", "No diff data to export.")
-            return
-        param_dir = get_temp_dir(self.model.get_base_ptn_filename(), branch="-rampo")
-        os.makedirs(param_dir, exist_ok=True)
-        base_name = "diff_" + os.path.splitext(os.path.basename(self.model.base_ptn.fname))[0] + ".chi"
-        default_path = os.path.join(param_dir, base_name)
-        fsave = QtWidgets.QFileDialog.getSaveFileName(
-            self.widget,
-            "Save Diff CHI",
-            default_path,
-            "CHI files (*.chi)",
-        )[0]
-        if fsave == "":
-            return
-        writechi(fsave, x_out, y_out)
-
-    def export_diff_ccd_npy(self):
-        if (not self.model.diff_img_exist()) or (not self.model.base_ptn_exist()):
-            QtWidgets.QMessageBox.warning(
-                self.widget,
-                "Warning",
-                "No ccd data available for export.",
-            )
-            return
-        int_cur, tth_cur, chi_cur = self.model.diff_img.get_ccd()
-        int_out, __, __ = self.get_display_ccd(int_cur, tth_cur, chi_cur)
-        if int_out is None:
-            QtWidgets.QMessageBox.warning(self.widget, "Warning", "No diff ccd data to export.")
-            return
-        param_dir = get_temp_dir(self.model.get_base_ptn_filename(), branch="-rampo")
-        os.makedirs(param_dir, exist_ok=True)
-        base_name = "diff_" + os.path.splitext(os.path.basename(self.model.base_ptn.fname))[0] + "_ccd.npy"
-        default_path = os.path.join(param_dir, base_name)
-        fsave = QtWidgets.QFileDialog.getSaveFileName(
-            self.widget,
-            "Save Diff CCD NPY",
-            default_path,
-            "NumPy files (*.npy)",
-        )[0]
-        if fsave == "":
-            return
-        int_out = np.asarray(int_out, dtype=float)
-        tth_cur = np.asarray(tth_cur, dtype=float)
-        chi_cur = np.asarray(chi_cur, dtype=float)
-        np.save(fsave, int_out)
-        root, _ = os.path.splitext(fsave)
-        tth_path = root + "_tth.npy"
-        chi_path = root + "_chi.npy"
-        py_path = root + "_plot.py"
-        np.save(tth_path, tth_cur)
-        np.save(chi_path, chi_cur)
-        cfg = self.get_ccd_render_config(int_out) or {}
-        cmap = cfg.get("cmap", "coolwarm")
-        vmin = float(cfg.get("vmin", self.model.diff_state.vmin_2d))
-        vmax = float(cfg.get("vmax", self.model.diff_state.vmax_2d))
-        center_zero = bool(cfg.get("center_zero", False))
-        script = (
-            "import numpy as np\n"
-            "import matplotlib.pyplot as plt\n"
-            "from matplotlib import colors as mcolors\n\n"
-            "def main():\n"
-            f"    intensity = np.load({os.path.basename(fsave)!r})\n"
-            f"    tth = np.load({os.path.basename(tth_path)!r})\n"
-            f"    chi = np.load({os.path.basename(chi_path)!r})\n"
-            f"    cmap = {cmap!r}\n"
-            f"    vmin = {vmin!r}\n"
-            f"    vmax = {vmax!r}\n"
-            f"    center_zero = {center_zero!r}\n"
-            "    fig, ax = plt.subplots(figsize=(7, 4.5), facecolor='white')\n"
-            "    ax.set_facecolor('white')\n"
-            "    im_kwargs = {\n"
-            "        'origin': 'lower',\n"
-            "        'extent': [float(np.nanmin(tth)), float(np.nanmax(tth)), float(np.nanmin(chi)), float(np.nanmax(chi))],\n"
-            "        'aspect': 'auto',\n"
-            "        'cmap': cmap,\n"
-            "    }\n"
-            "    if center_zero:\n"
-            "        im_kwargs['norm'] = mcolors.TwoSlopeNorm(vmin=vmin, vcenter=0.0, vmax=vmax)\n"
-            "    else:\n"
-            "        im_kwargs['vmin'] = vmin\n"
-            "        im_kwargs['vmax'] = vmax\n"
-            "    ax.imshow(intensity, **im_kwargs)\n"
-            "    ax.set_xlabel('Raman Shift (cm$^{-1}$)')\n"
-            "    ax.set_ylabel('CCD Pixel')\n"
-            "    fig.tight_layout()\n"
-            "    plt.show()\n\n"
-            "if __name__ == '__main__':\n"
-            "    main()\n"
-        )
-        with open(py_path, "w", encoding="utf-8") as fh:
-            fh.write(script)

@@ -1,5 +1,6 @@
 import os
 import re
+import datetime
 import numpy as np
 from qtpy import QtWidgets, QtCore
 from matplotlib.figure import Figure
@@ -59,7 +60,6 @@ class SequenceController(object):
         self.widget.pushButton_SeqSetRoi.clicked.connect(self._arm_roi_selection)
         self.widget.pushButton_SeqClearRoi.clicked.connect(self._clear_roi)
         self.widget.pushButton_SeqCompute.clicked.connect(self._compute_sequence)
-        self.widget.pushButton_SeqExportImage.clicked.connect(self._export_image)
         self.widget.pushButton_SeqExportNpy.clicked.connect(self._export_npy)
 
     def _on_main_tab_changed(self, _idx):
@@ -475,32 +475,19 @@ class SequenceController(object):
         except Exception:
             self._roi_artist_1d = None
 
-    def _export_image(self):
-        if (self._seq_x is None) or (self._seq_y is None):
-            self._set_status("No sequence data to export.")
-            return
-        base = os.path.join(self.model.chi_path, "sequence.png")
-        filen, _ = QtWidgets.QFileDialog.getSaveFileName(
-            self.widget,
-            "Export sequence image",
-            base,
-            "Image files (*.png *.pdf)",
-        )
-        if not filen:
-            return
-        self._seq_fig.savefig(filen, dpi=300, bbox_inches="tight")
-        self._set_status("Image exported.")
-
     def _export_npy(self):
         if (self._seq_x is None) or (self._seq_y is None):
             self._set_status("No sequence data to export.")
             return
         root = self.model.chi_path if str(getattr(self.model, "chi_path", "")).strip() else os.getcwd()
-        out_dir = os.path.join(root, "sequence_py")
+        stamp = datetime.datetime.now().strftime("%Y%m%d-%H%M%S")
+        out_dir = os.path.join(root, f"seq-py-{stamp}")
         os.makedirs(out_dir, exist_ok=True)
 
         npy_path = os.path.join(out_dir, "sequence.npy")
         py_path = os.path.join(out_dir, "plot_sequence.py")
+        png_path = os.path.join(out_dir, "sequence.png")
+        pdf_path = os.path.join(out_dir, "sequence.pdf")
 
         data = np.column_stack([self._seq_x, self._seq_y])
         np.save(npy_path, data)
@@ -541,4 +528,11 @@ class SequenceController(object):
         with open(py_path, "w", encoding="utf-8") as fh:
             fh.write(script)
 
-        self._set_status("Exported sequence_py (sequence.npy + plot_sequence.py).")
+        try:
+            self._seq_fig.savefig(png_path, dpi=300, bbox_inches="tight")
+            self._seq_fig.savefig(pdf_path, dpi=300, bbox_inches="tight")
+        except Exception:
+            pass
+
+        self._set_status(
+            "Exported seq-py folder (sequence.npy + plot_sequence.py + sequence.png + sequence.pdf).")

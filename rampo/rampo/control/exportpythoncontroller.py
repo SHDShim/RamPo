@@ -1,6 +1,7 @@
 import os
 import json
 import datetime
+import re
 import numpy as np
 from qtpy import QtWidgets
 from matplotlib.collections import LineCollection as MplLineCollection
@@ -13,6 +14,21 @@ class ExportPythonController(object):
         self.model = model
         self.widget = widget
         self.plot_ctrl = plot_ctrl
+
+    def _build_export_dir_name(self):
+        stamp = datetime.datetime.now().strftime("%Y%m%d-%H%M%S")
+        source_name = "rampo"
+        try:
+            if hasattr(self.model, "base_ptn") and getattr(self.model.base_ptn, "fname", None):
+                source_name = os.path.splitext(
+                    os.path.basename(str(self.model.base_ptn.fname))
+                )[0]
+        except Exception:
+            source_name = "rampo"
+        source_name = re.sub(r"[^\w.\-]+", "-", str(source_name)).strip("-")
+        if source_name == "":
+            source_name = "rampo"
+        return f"{source_name}-spectrum-{stamp}"
 
     def export_current_view(self):
         if not hasattr(self.widget, "mpl") or (not hasattr(self.widget.mpl, "canvas")):
@@ -36,8 +52,7 @@ class ExportPythonController(object):
         if out_root in (None, ""):
             return
 
-        stamp = datetime.datetime.now().strftime("%Y%m%d-%H%M%S")
-        export_dir = os.path.join(out_root, f"rampo_python_export_{stamp}")
+        export_dir = os.path.join(out_root, self._build_export_dir_name())
         os.makedirs(export_dir, exist_ok=True)
 
         fig = self.widget.mpl.canvas.fig

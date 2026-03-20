@@ -421,6 +421,9 @@ class MainWindow(QtWidgets.QMainWindow, Ui_MainWindow):
             if idx >= 0:
                 insert_idx = idx
         self.verticalLayout_31.insertWidget(insert_idx, self.groupBox_NavCarry)
+        if self.verticalLayout_31.count() == 0 or \
+                self.verticalLayout_31.itemAt(self.verticalLayout_31.count() - 1).spacerItem() is None:
+            self.verticalLayout_31.addStretch(1)
 
     def _fix_tab_clipping(self):
         # Keep native tab visuals while nudging tab size metrics to prevent
@@ -1061,25 +1064,8 @@ class MainWindow(QtWidgets.QMainWindow, Ui_MainWindow):
         self.gridLayout_DiffCCD.addWidget(self.doubleSpinBox_DiffVmax, 1, 3, 1, 1)
         self.gridLayout_DiffCCD.addWidget(self.pushButton_DiffScaleToData, 2, 0, 1, 4)
 
-        # Export outputs only on demand.
-        self.groupBox_DiffExport = QtWidgets.QGroupBox("Export", self.diffContents)
-        self.groupBox_DiffExport.setObjectName("groupBox_DiffExport")
-        self.horizontalLayout_DiffExport = QtWidgets.QHBoxLayout(self.groupBox_DiffExport)
-        self.horizontalLayout_DiffExport.setObjectName("horizontalLayout_DiffExport")
-        self.pushButton_ExportDiffChi = QtWidgets.QPushButton("Export Diff CHI", self.groupBox_DiffExport)
-        self.pushButton_ExportDiffChi.setObjectName("pushButton_ExportDiffChi")
-        self.pushButton_ExportDiffChi.setMinimumHeight(25)
-        self.pushButton_ExportDiffChi.setMaximumHeight(25)
-        self.pushButton_ExportDiffCCDNpy = QtWidgets.QPushButton("Export Diff CCD NPY", self.groupBox_DiffExport)
-        self.pushButton_ExportDiffCCDNpy.setObjectName("pushButton_ExportDiffCCDNpy")
-        self.pushButton_ExportDiffCCDNpy.setMinimumHeight(25)
-        self.pushButton_ExportDiffCCDNpy.setMaximumHeight(25)
-        self.horizontalLayout_DiffExport.addWidget(self.pushButton_ExportDiffChi)
-        self.horizontalLayout_DiffExport.addWidget(self.pushButton_ExportDiffCCDNpy)
-
         self.verticalLayout_DiffContents.addWidget(self.groupBox_DiffRef)
         self.verticalLayout_DiffContents.addWidget(self.groupBox_DiffCCD)
-        self.verticalLayout_DiffContents.addWidget(self.groupBox_DiffExport)
         self.verticalLayout_DiffContents.addStretch(1)
         self.scrollArea_Diff.setWidget(self.diffContents)
         self.verticalLayout_Diff.addWidget(self.scrollArea_Diff, 1)
@@ -1335,14 +1321,12 @@ class MainWindow(QtWidgets.QMainWindow, Ui_MainWindow):
         self.groupBox_MapExport.setObjectName("groupBox_MapExport")
         self.horizontalLayout_MapExport = QtWidgets.QHBoxLayout(self.groupBox_MapExport)
         self.horizontalLayout_MapExport.setSpacing(8)
-        self.pushButton_MapExportImage = QtWidgets.QPushButton("Export Image", self.groupBox_MapExport)
-        self.pushButton_MapExportImage.setObjectName("pushButton_MapExportImage")
         self.pushButton_MapExportNpy = QtWidgets.QPushButton("Export NPY", self.groupBox_MapExport)
         self.pushButton_MapExportNpy.setObjectName("pushButton_MapExportNpy")
-        self.horizontalLayout_MapExport.addWidget(self.pushButton_MapExportImage)
         self.horizontalLayout_MapExport.addWidget(self.pushButton_MapExportNpy)
-        self.pushButton_MapExportImage.setMinimumHeight(28)
         self.pushButton_MapExportNpy.setMinimumHeight(28)
+        self.pushButton_MapExportNpy.setSizePolicy(
+            QtWidgets.QSizePolicy.Expanding, QtWidgets.QSizePolicy.Fixed)
 
         self.verticalLayout_MapContents.addWidget(self.groupBox_MapLoad)
         self.verticalLayout_MapContents.addWidget(self.groupBox_MapRoi)
@@ -1486,14 +1470,12 @@ class MainWindow(QtWidgets.QMainWindow, Ui_MainWindow):
         self.groupBox_SeqExport.setObjectName("groupBox_SeqExport")
         self.horizontalLayout_SeqExport = QtWidgets.QHBoxLayout(self.groupBox_SeqExport)
         self.horizontalLayout_SeqExport.setSpacing(8)
-        self.pushButton_SeqExportImage = QtWidgets.QPushButton("Export Image", self.groupBox_SeqExport)
-        self.pushButton_SeqExportImage.setObjectName("pushButton_SeqExportImage")
         self.pushButton_SeqExportNpy = QtWidgets.QPushButton("Export NPY", self.groupBox_SeqExport)
         self.pushButton_SeqExportNpy.setObjectName("pushButton_SeqExportNpy")
-        self.horizontalLayout_SeqExport.addWidget(self.pushButton_SeqExportImage)
         self.horizontalLayout_SeqExport.addWidget(self.pushButton_SeqExportNpy)
-        self.pushButton_SeqExportImage.setMinimumHeight(28)
         self.pushButton_SeqExportNpy.setMinimumHeight(28)
+        self.pushButton_SeqExportNpy.setSizePolicy(
+            QtWidgets.QSizePolicy.Expanding, QtWidgets.QSizePolicy.Fixed)
 
         self.verticalLayout_SeqContents.addWidget(self.groupBox_SeqLoad)
         self.verticalLayout_SeqContents.addWidget(self.groupBox_SeqRoi)
@@ -1877,11 +1859,11 @@ class MainWindow(QtWidgets.QMainWindow, Ui_MainWindow):
             layout.setStretch(i, 1)
 
     def _setup_plot_config_python_export(self):
-        if not hasattr(self, "verticalLayout_PlotConfig"):
+        if not hasattr(self, "verticalLayout_PlotControl"):
             return
         if hasattr(self, "pushButton_ExportPythonView"):
             return
-        self.groupBox_PythonExport = QtWidgets.QGroupBox("Python Export", self.plotConfigContents)
+        self.groupBox_PythonExport = QtWidgets.QGroupBox("Python Export", self.plotControlContents)
         self.groupBox_PythonExport.setObjectName("groupBox_PythonExport")
         self.horizontalLayout_PythonExport = QtWidgets.QHBoxLayout(self.groupBox_PythonExport)
         self.horizontalLayout_PythonExport.setContentsMargins(12, 12, 12, 12)
@@ -1896,8 +1878,9 @@ class MainWindow(QtWidgets.QMainWindow, Ui_MainWindow):
         self.pushButton_ExportPythonView.setToolTip(
             "Export current on-screen view as a Python reproducible package")
         self.horizontalLayout_PythonExport.addWidget(self.pushButton_ExportPythonView, 1)
-        # place at the top in Plot > Config
-        self.verticalLayout_PlotConfig.insertWidget(0, self.groupBox_PythonExport)
+        # place near the bottom in Plot > Control, above the stretch spacer
+        insert_idx = max(0, self.verticalLayout_PlotControl.count() - 1)
+        self.verticalLayout_PlotControl.insertWidget(insert_idx, self.groupBox_PythonExport)
 
     def _setup_backup_comment_button(self):
         if (not hasattr(self, "horizontalLayout_BackupTools")) or \
@@ -1942,6 +1925,7 @@ class MainWindow(QtWidgets.QMainWindow, Ui_MainWindow):
         self.groupBox_FileDataBackup.setObjectName("groupBox_FileDataBackup")
         self.groupBox_FileDataBackup.setSizePolicy(
             QtWidgets.QSizePolicy.Preferred, QtWidgets.QSizePolicy.Expanding)
+        self.groupBox_FileDataBackup.setMinimumHeight(0)
         self.verticalLayout_FileDataBackup = QtWidgets.QVBoxLayout(
             self.groupBox_FileDataBackup)
         self.verticalLayout_FileDataBackup.setContentsMargins(12, 12, 12, 12)
@@ -1949,10 +1933,21 @@ class MainWindow(QtWidgets.QMainWindow, Ui_MainWindow):
 
         self.frame_BackupTools.setParent(self.groupBox_FileDataBackup)
         self.tableWidget_BackupInfo.setParent(self.groupBox_FileDataBackup)
+        self.tableWidget_BackupInfo.setSizePolicy(
+            QtWidgets.QSizePolicy.Expanding, QtWidgets.QSizePolicy.Expanding)
+        self.tableWidget_BackupInfo.setMinimumHeight(0)
         self.verticalLayout_FileDataBackup.addWidget(self.frame_BackupTools)
         self.verticalLayout_FileDataBackup.addWidget(self.tableWidget_BackupInfo, 1)
 
-        self.verticalLayout_2.addWidget(self.groupBox_FileDataBackup)
+        insert_idx = self.verticalLayout_2.count()
+        if insert_idx > 0:
+            last_item = self.verticalLayout_2.itemAt(insert_idx - 1)
+            if last_item is not None and last_item.spacerItem() is not None:
+                insert_idx -= 1
+        self.verticalLayout_2.insertWidget(insert_idx, self.groupBox_FileDataBackup)
+        self.verticalLayout_2.setStretchFactor(self.groupBox_FileDataBackup, 1)
+        self.verticalLayout_FileDataBackup.setStretch(0, 0)
+        self.verticalLayout_FileDataBackup.setStretch(1, 1)
 
         idx_backup = self.tabWidget_3.indexOf(self.tabWidget_3Page3)
         if idx_backup >= 0:
@@ -1961,6 +1956,25 @@ class MainWindow(QtWidgets.QMainWindow, Ui_MainWindow):
     def _setup_file_data_controls(self):
         if (not hasattr(self, "groupBox_36")) or (not hasattr(self, "gridLayout_21")):
             return
+        if hasattr(self, "verticalLayout_2"):
+            self.verticalLayout_2.setSpacing(8)
+            while self.verticalLayout_2.count():
+                last_item = self.verticalLayout_2.itemAt(self.verticalLayout_2.count() - 1)
+                if last_item is None or last_item.spacerItem() is None:
+                    break
+                self.verticalLayout_2.takeAt(self.verticalLayout_2.count() - 1)
+        if hasattr(self, "verticalLayout_26"):
+            self.verticalLayout_26.setContentsMargins(10, 8, 10, 8)
+            self.verticalLayout_26.setSpacing(6)
+        if hasattr(self, "horizontalLayout_2"):
+            self.horizontalLayout_2.setContentsMargins(8, 6, 8, 6)
+            self.horizontalLayout_2.setSpacing(10)
+        if hasattr(self, "horizontalLayout_13"):
+            self.horizontalLayout_13.setContentsMargins(8, 4, 8, 4)
+            self.horizontalLayout_13.setSpacing(10)
+        if hasattr(self, "horizontalLayout_6"):
+            self.horizontalLayout_6.setContentsMargins(8, 6, 8, 6)
+            self.horizontalLayout_6.setSpacing(18)
         self.groupBox_36.setVisible(True)
         self.groupBox_36.setTitle("Raw image handling")
         if hasattr(self, "checkBox_PreferRawSpe"):

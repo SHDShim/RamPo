@@ -21,7 +21,7 @@ class MplCanvas(FigureCanvasQTAgg):
             bottom=30 / height,
             right=1 - 20 / width,
             top=1 - 30 / height,
-            hspace=0.0,
+            hspace=0.05,
         )
 
         self.bgColor = "#1e1f22"
@@ -48,7 +48,7 @@ class MplCanvas(FigureCanvasQTAgg):
         self.ax_ccd = self.fig.add_subplot(self.gs[0:h_ccd, 0], sharex=self.ax_pattern)
         self.ax_pattern.set_ylabel("Intensity (arbitrary unit)")
         self.ax_pattern.ticklabel_format(axis="y", style="sci", scilimits=(-2, 2))
-        self.ax_pattern.get_yaxis().get_offset_text().set_position((-0.04, -0.1))
+        self.ax_pattern.get_yaxis().get_offset_text().set_position((-0.04, -0.14))
         self._style_axes()
 
     def _style_axis(self, axis):

@@ -1,6 +1,7 @@
 import os
 import math
 import re
+import datetime
 import numpy as np
 from qtpy import QtWidgets, QtCore
 from matplotlib.figure import Figure
@@ -103,7 +104,6 @@ class MapController(object):
         self.widget.pushButton_MapScalePercentile.clicked.connect(self._scale_percentile)
         self.widget.pushButton_MapScaleReset.clicked.connect(self._scale_reset)
 
-        self.widget.pushButton_MapExportImage.clicked.connect(self._export_image)
         self.widget.pushButton_MapExportNpy.clicked.connect(self._export_npy)
 
     def _on_main_tab_changed(self, _idx):
@@ -710,32 +710,19 @@ class MapController(object):
             self._roi_artist_1d = None
             self._roi_artist_2d = None
 
-    def _export_image(self):
-        if self._map_data is None:
-            self._set_status("No map data to export.")
-            return
-        base = os.path.join(self.model.chi_path, "map.png")
-        filen, _ = QtWidgets.QFileDialog.getSaveFileName(
-            self.widget,
-            "Export map image",
-            base,
-            "Image files (*.png *.pdf)",
-        )
-        if not filen:
-            return
-        self._map_fig.savefig(filen, dpi=300, bbox_inches="tight")
-        self._set_status("Image exported.")
-
     def _export_npy(self):
         if self._map_data is None:
             self._set_status("No map data to export.")
             return
         root = self.model.chi_path if str(getattr(self.model, "chi_path", "")).strip() else os.getcwd()
-        out_dir = os.path.join(root, "map_py")
+        stamp = datetime.datetime.now().strftime("%Y%m%d-%H%M%S")
+        out_dir = os.path.join(root, f"map-py-{stamp}")
         os.makedirs(out_dir, exist_ok=True)
 
         npy_path = os.path.join(out_dir, "map.npy")
         py_path = os.path.join(out_dir, "plot_map.py")
+        png_path = os.path.join(out_dir, "map.png")
+        pdf_path = os.path.join(out_dir, "map.pdf")
 
         np.save(npy_path, self._map_data)
         cmap = self._effective_cmap()
@@ -796,4 +783,10 @@ class MapController(object):
         with open(py_path, "w", encoding="utf-8") as fh:
             fh.write(script)
 
-        self._set_status("Exported map_py (map.npy + plot_map.py).")
+        try:
+            self._map_fig.savefig(png_path, dpi=300, bbox_inches="tight")
+            self._map_fig.savefig(pdf_path, dpi=300, bbox_inches="tight")
+        except Exception:
+            pass
+
+        self._set_status("Exported map-py folder (map.npy + plot_map.py + map.png + map.pdf).")

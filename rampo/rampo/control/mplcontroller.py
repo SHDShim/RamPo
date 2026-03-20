@@ -16,6 +16,7 @@ except Exception:
 #import matplotlib.pyplot as plt
 from qtpy import QtWidgets
 from qtpy import QtCore
+from matplotlib.ticker import MaxNLocator
 class MplController(object):
 
     def __init__(self, model, widget):
@@ -641,6 +642,7 @@ class MplController(object):
         ax_ccd.set_xlim(float(np.nanmin(x_edges)), float(np.nanmax(x_edges)))
         ax_ccd.set_ylim(float(np.nanmin(y_edges)), float(np.nanmax(y_edges)))
         ax_ccd.set_aspect("auto")
+        ax_ccd.yaxis.set_major_locator(MaxNLocator(integer=True))
         ax_ccd._rampo_ccd_x = np.asarray(tth_ccd, dtype=float)
         ax_ccd._rampo_ccd_y = np.asarray(chi_ccd, dtype=float)
         ax_ccd._rampo_ccd_z = int_new
@@ -1222,6 +1224,8 @@ class MplController(object):
             # ✅ Check if ax_ccd exists before setting ylim
             if hasattr(self.widget.mpl.canvas, 'ax_ccd') and (ccd_ylimits is not None):
                 self.widget.mpl.canvas.ax_ccd.set_ylim(ccd_ylimits)
+                self.widget.mpl.canvas.ax_ccd.yaxis.set_major_locator(
+                    MaxNLocator(integer=True))
             
             if self.model.jcpds_exist():
                 self._plot_jcpds(limits)
@@ -1248,11 +1252,11 @@ class MplController(object):
                 if use_wavenumber:
                     self.widget.mpl.canvas.ax_pattern.set_xlabel(r"Raman Shift (cm$^{-1}$)")
                     self.widget.mpl.canvas.ax_pattern.format_coord = \
-                        lambda x, y: "\n Shift={0:.3f} cm-1, I={1:.4e}".format(x, y)
+                        lambda x, y: "\n {0:.1f} cm-1, {1:.3e}".format(x, y)
                 else:
                     self.widget.mpl.canvas.ax_pattern.set_xlabel("Wavelength (nm)")
                     self.widget.mpl.canvas.ax_pattern.format_coord = \
-                        lambda x, y: "\n Wavelength={0:.3f} nm, I={1:.4e}".format(x, y)
+                        lambda x, y: "\n {0:.1f} nm, {1:.3e}".format(x, y)
                 if hasattr(self.widget.mpl.canvas, 'ax_ccd'):
                     self.widget.mpl.canvas.ax_ccd.set_ylabel("CCD Pixel")
             else:
@@ -1261,7 +1265,7 @@ class MplController(object):
                 self.widget.mpl.canvas.ax_pattern.set_xlabel(xlabel)
                 self.widget.mpl.canvas.ax_pattern.format_coord = \
                     lambda x, y: \
-                    "\n 2\u03B8={0:.3f}\u00B0, I={1:.4e}, d-sp={2:.4f}\u212B".\
+                    "\n 2\u03B8={0:.3f}\u00B0, {1:.3e}, d-sp={2:.4f}\u212B".\
                     format(x, y,
                         self.widget.doubleSpinBox_SetWavelength.value()
                         / 2. / np.sin(np.radians(x / 2.)))
@@ -1318,7 +1322,7 @@ class MplController(object):
                 x_unit = "nm"
             x_vals, y_vals, data = self._get_displayed_ccd_payload()
             if x_vals is None or y_vals is None or data is None:
-                return "{}={:.3f} {}, pixel={:.1f}, I=NA".format(x_label, x, x_unit, y)
+                return "{:.1f} {}, {}, NA".format(x, x_unit, int(round(y)))
             try:
                 arr = np.asarray(data, dtype=float)
                 ny, nx = arr.shape
@@ -1330,7 +1334,7 @@ class MplController(object):
                 z_text = "{:.0f}".format(float(z_val))
             except Exception:
                 z_text = "NA"
-            return "{}={:.3f} {}, pixel={:.1f}, I={}".format(x_label, x, x_unit, y, z_text)
+            return "{:.1f} {}, {}, {}".format(x, x_unit, int(row), z_text)
 
         # compute d-spacing from x (2-theta)
         try:
@@ -1342,8 +1346,8 @@ class MplController(object):
         x_vals, y_vals, data = self._get_displayed_ccd_payload()
         if x_vals is None or y_vals is None or data is None:
             if dsp is None:
-                return "2\u03B8={:.3f}\u00B0, azi={:.1f}, I=NA, d-sp=NA".format(x, y)
-            return "2\u03B8={:.3f}\u00B0, azi={:.1f}, I=NA, d-sp={:.4f}\u212B".format(x, y, dsp)
+                return "2\u03B8={:.3f}\u00B0, azi={:.1f}, NA, d-sp=NA".format(x, y)
+            return "2\u03B8={:.3f}\u00B0, azi={:.1f}, NA, d-sp={:.4f}\u212B".format(x, y, dsp)
 
         # ensure 2D image
         try:
@@ -1352,16 +1356,16 @@ class MplController(object):
         except Exception:
             # not a 2D image
             if dsp is None:
-                return "2\u03B8={:.3f}\u00B0, azi={:.1f}, I=NA, d-sp=NA".format(x, y)
-            return "2\u03B8={:.3f}\u00B0, azi={:.1f}, I=NA, d-sp={:.4f}\u212B".format(x, y, dsp)
+                return "2\u03B8={:.3f}\u00B0, azi={:.1f}, NA, d-sp=NA".format(x, y)
+            return "2\u03B8={:.3f}\u00B0, azi={:.1f}, NA, d-sp={:.4f}\u212B".format(x, y, dsp)
 
         try:
             col = int(np.nanargmin(np.abs(x_vals - x)))
             row = int(np.nanargmin(np.abs(y_vals - y)))
         except Exception:
             if dsp is None:
-                return "2\u03B8={:.3f}\u00B0, azi={:.1f}, I=NA, d-sp=NA".format(x, y)
-            return "2\u03B8={:.3f}\u00B0, azi={:.1f}, I=NA, d-sp={:.4f}\u212B".format(x, y, dsp)
+                return "2\u03B8={:.3f}\u00B0, azi={:.1f}, NA, d-sp=NA".format(x, y)
+            return "2\u03B8={:.3f}\u00B0, azi={:.1f}, NA, d-sp={:.4f}\u212B".format(x, y, dsp)
         col = min(max(col, 0), nx - 1)
         row = min(max(row, 0), ny - 1)
 
@@ -1388,8 +1392,8 @@ class MplController(object):
 
         # format final string: x, y, z, d-sp
         if dsp is None:
-            return "2\u03B8={:.3f}\u00B0, azi={:.1f}, I={}, d-sp=NA".format(x, y, z_text)
-        return "2\u03B8={:.3f}\u00B0, azi={:.1f}, I={}, d-sp={:.4f}\u212B".format(x, y, z_text, dsp)
+            return "2\u03B8={:.3f}\u00B0, azi={:.1f}, {}, d-sp=NA".format(x, y, z_text)
+        return "2\u03B8={:.3f}\u00B0, azi={:.1f}, {}, d-sp={:.4f}\u212B".format(x, y, z_text, dsp)
 
 from matplotlib.textpath import TextPath
 
