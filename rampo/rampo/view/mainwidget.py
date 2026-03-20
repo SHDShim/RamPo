@@ -1321,7 +1321,7 @@ class MainWindow(QtWidgets.QMainWindow, Ui_MainWindow):
         self.groupBox_MapExport.setObjectName("groupBox_MapExport")
         self.horizontalLayout_MapExport = QtWidgets.QHBoxLayout(self.groupBox_MapExport)
         self.horizontalLayout_MapExport.setSpacing(8)
-        self.pushButton_MapExportNpy = QtWidgets.QPushButton("Export NPY", self.groupBox_MapExport)
+        self.pushButton_MapExportNpy = QtWidgets.QPushButton("Export to Python, PDF, and PNG", self.groupBox_MapExport)
         self.pushButton_MapExportNpy.setObjectName("pushButton_MapExportNpy")
         self.horizontalLayout_MapExport.addWidget(self.pushButton_MapExportNpy)
         self.pushButton_MapExportNpy.setMinimumHeight(28)
@@ -1470,7 +1470,7 @@ class MainWindow(QtWidgets.QMainWindow, Ui_MainWindow):
         self.groupBox_SeqExport.setObjectName("groupBox_SeqExport")
         self.horizontalLayout_SeqExport = QtWidgets.QHBoxLayout(self.groupBox_SeqExport)
         self.horizontalLayout_SeqExport.setSpacing(8)
-        self.pushButton_SeqExportNpy = QtWidgets.QPushButton("Export NPY", self.groupBox_SeqExport)
+        self.pushButton_SeqExportNpy = QtWidgets.QPushButton("Export to Python, PDF, and PNG", self.groupBox_SeqExport)
         self.pushButton_SeqExportNpy.setObjectName("pushButton_SeqExportNpy")
         self.horizontalLayout_SeqExport.addWidget(self.pushButton_SeqExportNpy)
         self.pushButton_SeqExportNpy.setMinimumHeight(28)
@@ -1874,7 +1874,7 @@ class MainWindow(QtWidgets.QMainWindow, Ui_MainWindow):
         self.pushButton_ExportPythonView.setMaximumSize(QtCore.QSize(16777215, 16777215))
         self.pushButton_ExportPythonView.setSizePolicy(
             QtWidgets.QSizePolicy.Expanding, QtWidgets.QSizePolicy.Fixed)
-        self.pushButton_ExportPythonView.setText("Export Python (Current View)")
+        self.pushButton_ExportPythonView.setText("Export to Python, PDF, and PNG")
         self.pushButton_ExportPythonView.setToolTip(
             "Export current on-screen view as a Python reproducible package")
         self.horizontalLayout_PythonExport.addWidget(self.pushButton_ExportPythonView, 1)
