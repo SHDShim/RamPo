@@ -45,13 +45,13 @@ rampo
 
 1. Open an `.spe` file by clicking `Open SPE` button.
 2. Set the excitation laser wavelength.
-3. In the top toolbar, click the `CCD` button and the zoom-out button to rescale the spectrum display.
-4. In the `Spectrum` > `Process` tab, click `Select ROI` and draw a rectangle in the top image to define the ROI for spectrum integration.
-5. In the same tab, adjust the parameters in `Smoothing` if smoothing is needed.
-6. In the same tab, to define the background, click `Add area` and draw a rectangle on the lower spectrum plot to mark a range for background data points. Repeat this for several areas, ideally including both the left and right ends of the spectrum. Once you have selected enough background points, click `Fig BG` to fit the background. Check the `Bg show` box to display the fit, and check `BgSub` to subtract the background.
-7. For mapping, open the `Map` tab and click `Load SPE files` to select the map files. For ASU data, make sure you choose `*-raw.spe` files. Select `Row-major` for ASU data and `Snake` for APS data in the dropdown menu. Make sure `Nx` and `Ny` are correctly detected by RamPo. If not, update the values and then click `Compute Map`.
-8. In the `Map` tab, click `Select ROI` to choose the spectral range where intensity mapping will be performed.
-9. Use Diff, Seq, Waterfall, or PeakFit tools as needed.
+3. Use the top mouse toolbar to switch between `Zoom`, `ROI`, and `Peak`.
+4. In `Spectrum`, use `ROI` on the top CCD image to define the CCD row ROI for spectrum extraction.
+5. Still in `Spectrum`, leave mouse mode in `ROI` and drag on the 1D spectrum to add background-fit areas. Repeat as needed, then click `Fit BG`. Check `Bg show` to display the fitted background and `BgSub` to subtract it.
+6. Adjust `Smoothing` options if despike or Savitzky-Golay smoothing is needed.
+7. For mapping, open the `Map` tab and click `Load SPE files` to select the map files. For ASU data, choose `*-raw.spe` files. Select `Row-major` for ASU data and `Snake` for APS data. Confirm `Nx` and `Ny`, then click `Compute Map`.
+8. In `Map` or `Seq`, click the top `ROI` mouse mode, drag the spectral range on the main spectrum plot, and RamPo will return to `Zoom` after the ROI is set.
+9. Use Diff, Waterfall, or PeakFit tools as needed. In PeakFit, switch to top `Peak` mode to add or remove peaks on the spectrum.
 10. Press `Save` to create a numbered snapshot in the session folder.
 
 ## Save / Restore Behavior

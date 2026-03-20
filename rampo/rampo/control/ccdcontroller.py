@@ -497,13 +497,16 @@ class CCDController(object):
         arr = np.asarray([], dtype=float)
         ax_ccd = getattr(getattr(self.widget, "mpl", None), "canvas", None)
         ax_ccd = getattr(ax_ccd, "ax_ccd", None)
-        if ax_ccd is not None and getattr(ax_ccd, "images", None):
+        if ax_ccd is not None:
             try:
-                image_arr = ax_ccd.images[-1].get_array()
-                if np.ma.isMaskedArray(image_arr):
-                    arr = np.asarray(image_arr.compressed(), dtype=float)
-                else:
-                    arr = np.asarray(image_arr, dtype=float).ravel()
+                image_arr = getattr(ax_ccd, "_rampo_ccd_z", None)
+                if image_arr is None and getattr(ax_ccd, "images", None):
+                    image_arr = ax_ccd.images[-1].get_array()
+                if image_arr is not None:
+                    if np.ma.isMaskedArray(image_arr):
+                        arr = np.asarray(image_arr.compressed(), dtype=float)
+                    else:
+                        arr = np.asarray(image_arr, dtype=float).ravel()
             except Exception:
                 arr = np.asarray([], dtype=float)
         if arr.size == 0:

@@ -8,7 +8,6 @@ try:
 except Exception:
     medfilt = None
     savgol_filter = None
-from matplotlib.widgets import MultiCursor
 #from matplotlib.widgets import MultiCursor
 #import matplotlib.transforms as transforms
 #import matplotlib.colors as colors
@@ -30,6 +29,8 @@ class MplController(object):
         self._toolbar_active = False
         self._update_delay_ms = 25
         self._pending_update_args = None
+        self._vcursor_pattern = None
+        self._vcursor_ccd = None
         self._update_timer = QtCore.QTimer(self.widget)
         self._update_timer.setSingleShot(True)
         self._update_timer.timeout.connect(self._flush_update_request)
@@ -102,41 +103,108 @@ class MplController(object):
     def set_diff_controller(self, diff_ctrl):
         self.diff_ctrl = diff_ctrl
 
-    def update_vertical_cursor_position(self, event):
-        cursor = getattr(self.widget, "cursor", None)
-        if cursor is None or event is None:
-            return
-        onmove = getattr(cursor, "onmove", None)
-        if callable(onmove):
-            try:
-                onmove(event)
-            except Exception:
-                pass
-
-    def clear_vertical_cursor_position(self):
-        cursor = getattr(self.widget, "cursor", None)
-        if cursor is None:
-            return
-        needs_redraw = False
-        for attr_name in ("vlines", "hlines"):
-            lines = getattr(cursor, attr_name, None)
-            if lines is None:
-                continue
-            if not isinstance(lines, (list, tuple)):
-                lines = [lines]
-            for line in lines:
-                if line is None:
-                    continue
+    def _clear_vertical_cursor_artists(self):
+        for attr in ("_vcursor_pattern", "_vcursor_ccd"):
+            artist = getattr(self, attr, None)
+            if artist is not None:
                 try:
-                    line.set_visible(False)
-                    needs_redraw = True
+                    artist.remove()
                 except Exception:
                     pass
+            setattr(self, attr, None)
+
+    def _ensure_vertical_cursor_artists(self):
+        if not self.widget.checkBox_LongCursor.isChecked():
+            self._clear_vertical_cursor_artists()
+            return
+        try:
+            lw_value = float(
+                self.widget.comboBox_VertCursorThickness.currentText())
+        except Exception:
+            lw_value = 1.0
+        ax_pattern = self.widget.mpl.canvas.ax_pattern
+        if self._vcursor_pattern is None or \
+                getattr(self._vcursor_pattern, "axes", None) is not ax_pattern:
+            self._vcursor_pattern = ax_pattern.axvline(
+                0.0, color='r', lw=lw_value, ls='--', visible=False)
+        else:
+            self._vcursor_pattern.set_linewidth(lw_value)
+        use_ccd = hasattr(self.widget.mpl.canvas, 'ax_ccd')
+        if use_ccd:
+            ax_ccd = self.widget.mpl.canvas.ax_ccd
+            if self._vcursor_ccd is None or \
+                    getattr(self._vcursor_ccd, "axes", None) is not ax_ccd:
+                self._vcursor_ccd = ax_ccd.axvline(
+                    0.0, color='r', lw=lw_value, ls='--', visible=False)
+            else:
+                self._vcursor_ccd.set_linewidth(lw_value)
+        else:
+            if self._vcursor_ccd is not None:
+                try:
+                    self._vcursor_ccd.remove()
+                except Exception:
+                    pass
+                self._vcursor_ccd = None
+
+    def update_vertical_cursor_position(self, event):
+        if not self.widget.checkBox_LongCursor.isChecked():
+            return
+        if (event is None) or (event.inaxes is None) or (event.xdata is None):
+            self.clear_vertical_cursor_position()
+            return
+        valid_axes = [self.widget.mpl.canvas.ax_pattern]
+        if hasattr(self.widget.mpl.canvas, 'ax_ccd'):
+            valid_axes.append(self.widget.mpl.canvas.ax_ccd)
+        if event.inaxes not in valid_axes:
+            self.clear_vertical_cursor_position()
+            return
+        self._ensure_vertical_cursor_artists()
+        x = float(event.xdata)
+        if self._vcursor_pattern is not None:
+            self._vcursor_pattern.set_xdata([x, x])
+            self._vcursor_pattern.set_visible(True)
+        if self._vcursor_ccd is not None:
+            self._vcursor_ccd.set_xdata([x, x])
+            self._vcursor_ccd.set_visible(True)
+        self.widget.mpl.canvas.draw_idle()
+
+    def clear_vertical_cursor_position(self):
+        needs_redraw = False
+        for artist in (self._vcursor_pattern, self._vcursor_ccd):
+            if artist is not None and artist.get_visible():
+                artist.set_visible(False)
+                needs_redraw = True
         if needs_redraw:
             try:
                 self.widget.mpl.canvas.draw_idle()
             except Exception:
                 pass
+
+    def _axis_centers_to_edges(self, values):
+        vals = np.asarray(values, dtype=float)
+        if vals.size == 0:
+            return np.asarray([], dtype=float)
+        if vals.size == 1:
+            half_step = 0.5
+            if np.isfinite(vals[0]):
+                half_step = max(abs(vals[0]) * 0.5, 0.5)
+            return np.asarray([vals[0] - half_step, vals[0] + half_step], dtype=float)
+        edges = np.empty(vals.size + 1, dtype=float)
+        edges[1:-1] = 0.5 * (vals[:-1] + vals[1:])
+        edges[0] = vals[0] - 0.5 * (vals[1] - vals[0])
+        edges[-1] = vals[-1] + 0.5 * (vals[-1] - vals[-2])
+        return edges
+
+    def _get_displayed_ccd_payload(self):
+        ax = getattr(self.widget.mpl.canvas, "ax_ccd", None)
+        if ax is None:
+            return None, None, None
+        x_vals = getattr(ax, "_rampo_ccd_x", None)
+        y_vals = getattr(ax, "_rampo_ccd_y", None)
+        z_vals = getattr(ax, "_rampo_ccd_z", None)
+        if x_vals is None or y_vals is None or z_vals is None:
+            return None, None, None
+        return np.asarray(x_vals, dtype=float), np.asarray(y_vals, dtype=float), z_vals
 
     def _is_spe_mode(self):
         if not self.model.base_ptn_exist():
@@ -556,26 +624,26 @@ class MplController(object):
         int_new = ma.masked_where(combined_mask, int_plot, copy=False)
 
 
-        y_min = float(chi_ccd.min())
-        y_max = float(chi_ccd.max())
-        if y_min == y_max:
-            pad = max(abs(y_min), 1.0) * 0.5
-            y_min -= pad
-            y_max += pad
-
-        imshow_kwargs = {
-            "origin": "lower",
-            "extent": [tth_ccd.min(), tth_ccd.max(), y_min, y_max],
-            "aspect": "auto",
+        x_edges = self._axis_centers_to_edges(tth_ccd)
+        y_edges = self._axis_centers_to_edges(chi_ccd)
+        ax_ccd = self.widget.mpl.canvas.ax_ccd
+        mesh_kwargs = {
             "cmap": cmap,
+            "shading": "flat",
         }
         if norm is None:
-            imshow_kwargs["vmin"] = climits[0]
-            imshow_kwargs["vmax"] = climits[1]
+            mesh_kwargs["vmin"] = climits[0]
+            mesh_kwargs["vmax"] = climits[1]
         else:
-            imshow_kwargs["norm"] = norm
-        self.widget.mpl.canvas.ax_ccd.imshow(int_new, **imshow_kwargs)
-        self.widget.mpl.canvas.ax_ccd.grid(False)
+            mesh_kwargs["norm"] = norm
+        ax_ccd.pcolormesh(x_edges, y_edges, int_new, **mesh_kwargs)
+        ax_ccd.grid(False)
+        ax_ccd.set_xlim(float(np.nanmin(x_edges)), float(np.nanmax(x_edges)))
+        ax_ccd.set_ylim(float(np.nanmin(y_edges)), float(np.nanmax(y_edges)))
+        ax_ccd.set_aspect("auto")
+        ax_ccd._rampo_ccd_x = np.asarray(tth_ccd, dtype=float)
+        ax_ccd._rampo_ccd_y = np.asarray(chi_ccd, dtype=float)
+        ax_ccd._rampo_ccd_z = int_new
         if hasattr(self.widget, "ccd_hist_widget"):
             self.widget.ccd_hist_widget.set_data(
                 int_new, vmin=float(climits[0]), vmax=float(climits[1]))
@@ -1210,38 +1278,9 @@ class MplController(object):
                 """
                 self.widget.mpl.canvas.ax_ccd.format_coord = self._format_coord_x_y_z_dsp
             
-            # ✅ MOVED: Set up cursor BEFORE drawing (inside try block)
-            if self.widget.checkBox_LongCursor.isChecked():
-                # Determine which axes to use
-                if hasattr(self.widget.mpl.canvas, 'ax_ccd') and \
-                   self.model.diff_img_exist():
-                    # Use both axes
-                    axes_list = (self.widget.mpl.canvas.ax_pattern,
-                                self.widget.mpl.canvas.ax_ccd)
-                else:
-                    # Use only pattern axis
-                    axes_list = (self.widget.mpl.canvas.ax_pattern,)
-                
-                # Get line width
-                try:
-                    lw_value = float(
-                        self.widget.comboBox_VertCursorThickness.currentText())
-                except:
-                    lw_value = 1.0
-                
-                # Create MultiCursor
-                self.widget.cursor = MultiCursor(
-                    self.widget.mpl.canvas.fig,  # Use figure, not canvas
-                    axes_list,
-                    color='r',
-                    lw=lw_value,
-                    ls='--',
-                    useblit=False,
-                    horizOn=False)  # Only vertical line
-            else:
-                # Clear cursor if checkbox is unchecked
-                if hasattr(self.widget, 'cursor'):
-                    self.widget.cursor = None
+            self._ensure_vertical_cursor_artists()
+            if not self.widget.checkBox_LongCursor.isChecked():
+                self.clear_vertical_cursor_position()
             
             # ✅ Draw canvas (deferred to Qt event loop)
             QtCore.QTimer.singleShot(0, self.widget.mpl.canvas.draw)
@@ -1269,7 +1308,6 @@ class MplController(object):
         :param y: azimuthal angle
         """
         if self._is_spe_mode():
-            ax = self.widget.mpl.canvas.ax_ccd
             use_wavenumber = bool(
                 getattr(self.widget, "checkBox_SpectrumWavenumber", None) and
                 self.widget.checkBox_SpectrumWavenumber.isChecked())
@@ -1278,25 +1316,21 @@ class MplController(object):
             if not use_wavenumber:
                 x_label = "Wavelength"
                 x_unit = "nm"
-            if not ax.images:
+            x_vals, y_vals, data = self._get_displayed_ccd_payload()
+            if x_vals is None or y_vals is None or data is None:
                 return "{}={:.3f} {}, pixel={:.1f}, I=NA".format(x_label, x, x_unit, y)
-            img = ax.images[0]
-            data = img.get_array()
-            xmin, xmax, ymin, ymax = img.get_extent()
             try:
-                ny, nx = data.shape
-                fx = (x - xmin) / (xmax - xmin) * (nx - 1)
-                fy = (y - ymin) / (ymax - ymin) * (ny - 1)
-                col = int(round(fx))
-                row = int(round(fy))
+                arr = np.asarray(data, dtype=float)
+                ny, nx = arr.shape
+                col = int(np.nanargmin(np.abs(x_vals - x)))
+                row = int(np.nanargmin(np.abs(y_vals - y)))
                 col = min(max(col, 0), nx - 1)
                 row = min(max(row, 0), ny - 1)
-                z_val = data[row, col]
+                z_val = arr[row, col]
                 z_text = "{:.0f}".format(float(z_val))
             except Exception:
                 z_text = "NA"
             return "{}={:.3f} {}, pixel={:.1f}, I={}".format(x_label, x, x_unit, y, z_text)
-        ax = self.widget.mpl.canvas.ax_ccd
 
         # compute d-spacing from x (2-theta)
         try:
@@ -1305,60 +1339,37 @@ class MplController(object):
         except Exception:
             dsp = None
 
-        # If no image on the axis, return x,y,dsp only
-        if not ax.images:
-            if dsp is None:
-                return "2\u03B8={:.3f}\u00B0, azi={:.1f}, I=NA, d-sp=NA".format(x, y)
-            return "2\u03B8={:.3f}\u00B0, azi={:.1f}, I=NA, d-sp={:.4f}\u212B".format(x, y, dsp)
-
-        img = ax.images[0]
-        data = img.get_array()
-        if data is None:
-            if dsp is None:
-                return "2\u03B8={:.3f}\u00B0, azi={:.1f}, I=NA, d-sp=NA".format(x, y)
-            return "2\u03B8={:.3f}\u00B0, azi={:.1f}, I=NA, d-sp={:.4f}\u212B".format(x, y, dsp)
-
-        # extent -> map data coords to pixel indices
-        xmin, xmax, ymin, ymax = img.get_extent()
-        if xmax == xmin or ymax == ymin:
-            # degenerate extent
+        x_vals, y_vals, data = self._get_displayed_ccd_payload()
+        if x_vals is None or y_vals is None or data is None:
             if dsp is None:
                 return "2\u03B8={:.3f}\u00B0, azi={:.1f}, I=NA, d-sp=NA".format(x, y)
             return "2\u03B8={:.3f}\u00B0, azi={:.1f}, I=NA, d-sp={:.4f}\u212B".format(x, y, dsp)
 
         # ensure 2D image
         try:
-            ny, nx = data.shape
+            arr = np.asarray(data, dtype=float)
+            ny, nx = arr.shape
         except Exception:
             # not a 2D image
             if dsp is None:
                 return "2\u03B8={:.3f}\u00B0, azi={:.1f}, I=NA, d-sp=NA".format(x, y)
             return "2\u03B8={:.3f}\u00B0, azi={:.1f}, I=NA, d-sp={:.4f}\u212B".format(x, y, dsp)
 
-        # fractional positions (0..nx-1, 0..ny-1)
-        fx = (x - xmin) / (xmax - xmin) * (nx - 1)
-        fy = (y - ymin) / (ymax - ymin) * (ny - 1)
-
-        # nearest-neighbor
-        col = int(round(fx))
-        row = int(round(fy))
-
-        # handle origin
-        origin = getattr(img, 'origin', None)
-        if origin == 'upper':
-            row = (ny - 1) - row
-
-        # clamp & check bounds
-        if col < 0 or col >= nx or row < 0 or row >= ny:
+        try:
+            col = int(np.nanargmin(np.abs(x_vals - x)))
+            row = int(np.nanargmin(np.abs(y_vals - y)))
+        except Exception:
             if dsp is None:
                 return "2\u03B8={:.3f}\u00B0, azi={:.1f}, I=NA, d-sp=NA".format(x, y)
             return "2\u03B8={:.3f}\u00B0, azi={:.1f}, I=NA, d-sp={:.4f}\u212B".format(x, y, dsp)
+        col = min(max(col, 0), nx - 1)
+        row = min(max(row, 0), ny - 1)
 
         # read intensity, handle masked/invalid
         try:
             if np.ma.isMaskedArray(data):
                 mask = data.mask
-                if mask is not None and mask.shape == data.shape and mask[row, col]:
+                if mask is not None and mask.shape == arr.shape and mask[row, col]:
                     z_text = "NA"
                 else:
                     z_val = data.data[row, col]
@@ -1367,7 +1378,7 @@ class MplController(object):
                     else:
                         z_text = "{:.0f}".format(float(z_val))
             else:
-                z_val = data[row, col]
+                z_val = arr[row, col]
                 if isinstance(z_val, (float, np.floating)) and (np.isnan(z_val) or np.isinf(z_val)):
                     z_text = "(invalid)"
                 else:
