@@ -1,6 +1,7 @@
 include README.md
 include LICENSE
 recursive-include rampo/rampo/mplstyle *.mplstyle
+recursive-include rampo/rampo/assets *
 exclude .gitignore
 exclude z-ToDo.md
 global-exclude .gitignore z-ToDo.md

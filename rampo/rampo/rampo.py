@@ -34,15 +34,31 @@ import matplotlib
 matplotlib.use('QtAgg')
 
 from qtpy import QtWidgets
-from qtpy.QtGui import QPalette, QColor
+from qtpy.QtGui import QPalette, QColor, QIcon
 
 from io import StringIO
 import traceback
 import time
 from sys import platform as _platform
 
+
+def _resolve_app_icon_path():
+    assets_dir = os.path.join(os.path.dirname(__file__), "assets")
+    if sys.platform == "darwin":
+        icon_name = "RamPo.icns"
+    else:
+        icon_name = "RamPo.ico"
+    icon_path = os.path.join(assets_dir, icon_name)
+    if os.path.exists(icon_path):
+        return icon_path
+    return None
+
+
 app = QtWidgets.QApplication(sys.argv)
 app.setStyle('Fusion')
+_app_icon_path = _resolve_app_icon_path()
+if _app_icon_path is not None:
+    app.setWindowIcon(QIcon(_app_icon_path))
 
 if __package__ in (None, ""):
     repo_root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
@@ -122,6 +138,8 @@ def build_dark_palette():
 app.setPalette(build_dark_palette())
 
 controller = MainController()
+if _app_icon_path is not None:
+    controller.widget.setWindowIcon(QIcon(_app_icon_path))
 controller.show_window()
 
 _shutdown_done = {"value": False}

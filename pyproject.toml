@@ -61,4 +61,4 @@ version = {attr = "rampo.rampo.version.__version__"}
 include = ["rampo*"]
 
 [tool.setuptools.package-data]
-"rampo.rampo" = ["mplstyle/*.mplstyle"]
+"rampo.rampo" = ["assets/*", "mplstyle/*.mplstyle"]
