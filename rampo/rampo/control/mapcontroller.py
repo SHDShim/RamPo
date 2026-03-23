@@ -61,6 +61,8 @@ class MapController(object):
         self._map_canvas = FigureCanvasQTAgg(self._map_fig)
         self.widget.verticalLayout_MapCanvas.addWidget(self._map_canvas, 1)
         self._map_canvas.mpl_connect("button_press_event", self._on_map_click)
+        self._map_canvas.mpl_connect("motion_notify_event", self._on_map_hover)
+        self._map_canvas.mpl_connect("figure_leave_event", self._clear_hover_filename)
         self._draw_map()
 
     def _recreate_map_axes(self):
@@ -136,6 +138,30 @@ class MapController(object):
         if hasattr(self.widget, "label_MapLoaded"):
             self.widget.label_MapLoaded.setText(f"Loaded: {len(self._chi_files)}")
 
+    def _set_hover_filename(self, filename):
+        if hasattr(self.widget, "lineEdit_MapHoverFile"):
+            self.widget.lineEdit_MapHoverFile.setText(str(filename))
+
+    def _clear_hover_filename(self, _event=None):
+        fallback = ""
+        if hasattr(self.widget, "label_MapStatus"):
+            fallback = str(self.widget.label_MapStatus.text() or "")
+        self._set_hover_filename(fallback)
+
+    def _hovered_file_index(self, event):
+        if self._map_data is None:
+            return None
+        if event.inaxes != self._map_ax:
+            return None
+        if (event.xdata is None) or (event.ydata is None):
+            return None
+        x = int(round(event.xdata))
+        y = int(round(event.ydata))
+        lin = self._grid_to_linear(x, y)
+        if lin is None:
+            return None
+        return self._lin_to_file.get(lin, None)
+
     def _current_file_index_in_selection(self):
         if not self._chi_files or not self.model.base_ptn_exist():
             return None
@@ -165,6 +191,7 @@ class MapController(object):
         self._chi_cache = {}
         self._roi_1d = None
         self._map_data = None
+        self._clear_hover_filename()
 
         nx, ny = self._guess_grid_dims(len(self._chi_files))
         self._sync_ui_from_roi = True
@@ -395,6 +422,7 @@ class MapController(object):
         self._set_status("ROI cleared.")
         self.deactivate_interactions()
         self._clear_roi_overlays()
+        self._clear_hover_filename()
 
     def _on_roi_1d_selected(self, eclick, erelease):
         if (eclick.xdata is None) or (erelease.xdata is None):
@@ -584,6 +612,7 @@ class MapController(object):
         self._map_cbar = None
         if self._map_data is None:
             self._map_ax.set_axis_off()
+            self._clear_hover_filename()
             self._map_canvas.draw_idle()
             return
 
@@ -641,23 +670,28 @@ class MapController(object):
         self._map_canvas.draw_idle()
 
     def _on_map_click(self, event):
-        if self._map_data is None:
-            return
-        if event.inaxes != self._map_ax:
-            return
-        if (event.xdata is None) or (event.ydata is None):
-            return
-        x = int(round(event.xdata))
-        y = int(round(event.ydata))
-        lin = self._grid_to_linear(x, y)
-        if lin is None:
-            return
-        file_idx = self._lin_to_file.get(lin, None)
+        file_idx = self._hovered_file_index(event)
         if file_idx is None:
-            self._set_status(f"No file for map pixel ({x}, {y})")
+            if event.inaxes == self._map_ax and \
+                    event.xdata is not None and event.ydata is not None:
+                x = int(round(event.xdata))
+                y = int(round(event.ydata))
+                self._set_status(f"No file for map pixel ({x}, {y})")
             return
         self._load_file_to_main_plot(file_idx)
+        x = int(round(event.xdata))
+        y = int(round(event.ydata))
         self._set_status(f"Selected map pixel ({x}, {y})")
+
+    def _on_map_hover(self, event):
+        file_idx = self._hovered_file_index(event)
+        if file_idx is None:
+            self._clear_hover_filename()
+            return
+        if 0 <= file_idx < len(self._chi_files):
+            self._set_hover_filename(os.path.basename(self._chi_files[file_idx]))
+        else:
+            self._clear_hover_filename()
 
     def _is_map_tab_active(self):
         return hasattr(self.widget, "tab_Map") and \
