@@ -181,7 +181,8 @@ class MapController(object):
                 self.widget.checkBox_PreferRawSpe.isChecked()),
             include_chi=True,
             label="Spectra",
-            multi=True)
+            multi=True,
+            hide_rampo_dirs=True)
         if not files:
             return
 

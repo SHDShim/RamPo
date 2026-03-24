@@ -5,7 +5,7 @@ import re
 import os
 import shutil
 import collections
-from qtpy import QtWidgets
+from qtpy import QtWidgets, QtCore
 
 def get_unique_filename(filename):
     """Generate a unique filename by appending a number 
@@ -180,12 +180,66 @@ def open_spectrum_file_dialog(
         include_chi=True,
         include_manifest=False,
         label="Spectra",
-        multi=False):
+        multi=False,
+        hide_rampo_dirs=False):
     dialog = QtWidgets.QFileDialog(parent, title, start_dir or "")
     dialog.setOption(QtWidgets.QFileDialog.DontUseNativeDialog, True)
     dialog.setFileMode(
         QtWidgets.QFileDialog.ExistingFiles if multi
         else QtWidgets.QFileDialog.ExistingFile)
+
+    hidden_suffixes = ("-rampo",) if hide_rampo_dirs else ()
+
+    def _is_hidden_dir(name):
+        name = str(name or "").lower()
+        return any(name.endswith(suffix) for suffix in hidden_suffixes)
+
+    def _source_index(model, index):
+        source_model = model
+        source_index = index
+        while hasattr(source_model, "mapToSource") and callable(source_model.mapToSource):
+            source_index = source_model.mapToSource(source_index)
+            source_model = source_model.sourceModel()
+            if source_model is None:
+                break
+        return source_model, source_index
+
+    def _hide_irrelevant_rows():
+        for view in dialog.findChildren(QtWidgets.QAbstractItemView):
+            model = view.model()
+            if model is None:
+                continue
+            root_index = view.rootIndex()
+            row_count = model.rowCount(root_index)
+            for row in range(row_count):
+                index = model.index(row, 0, root_index)
+                if not index.isValid():
+                    continue
+                source_model, source_index = _source_index(model, index)
+                is_dir = False
+                folder_name = str(model.data(index, QtCore.Qt.DisplayRole) or "")
+                if source_model is not None:
+                    if hasattr(source_model, "isDir"):
+                        try:
+                            is_dir = bool(source_model.isDir(source_index))
+                        except Exception:
+                            is_dir = False
+                    if hasattr(source_model, "fileName"):
+                        try:
+                            folder_name = str(source_model.fileName(source_index) or folder_name)
+                        except Exception:
+                            pass
+                should_hide = bool(is_dir and _is_hidden_dir(folder_name))
+                if isinstance(view, QtWidgets.QTreeView):
+                    view.setRowHidden(row, root_index, should_hide)
+                elif hasattr(view, "setRowHidden"):
+                    view.setRowHidden(row, should_hide)
+
+    def _schedule_hide_irrelevant_rows():
+        # QFileDialog models often populate asynchronously, so run the hide pass
+        # a few times after updates to catch late-arriving directory rows.
+        for delay_ms in (0, 25, 100, 250):
+            QtCore.QTimer.singleShot(delay_ms, _hide_irrelevant_rows)
 
     def _update_name_filter(path):
         current_dir = path if os.path.isdir(path) else os.path.dirname(path)
@@ -199,9 +253,13 @@ def open_spectrum_file_dialog(
         )
         dialog.setNameFilter(name_filter)
         dialog.selectNameFilter(name_filter)
+        if hidden_suffixes:
+            _schedule_hide_irrelevant_rows()
 
     _update_name_filter(start_dir)
     dialog.directoryEntered.connect(_update_name_filter)
+    if hidden_suffixes:
+        _schedule_hide_irrelevant_rows()
 
     if dialog.exec():
         selected = dialog.selectedFiles()
