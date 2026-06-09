@@ -79,6 +79,12 @@ Each numbered backup is intended to be self-contained and stores the JSON sessio
 
 ## Citation
 
-> RamPo - Raman spectroscopy analysis software for high-pressure experiments.
+If you use RamPo in your research, please cite the archived Zenodo release.
+The repository citation metadata is provided in `CITATION.cff`, and Zenodo
+metadata is provided in `.zenodo.json`.
 
-The citation string shipped with the package is defined in `rampo/rampo/citation.py`.
+Suggested citation before the DOI is minted:
+
+> Shim, S.-H. Dan (2026). RamPo: Raman spectroscopy analysis software for high-pressure experiments (Version 0.7.2a0) [Computer software]. Zenodo.
+
+After Zenodo creates the DOI, add the DOI URL to this citation.

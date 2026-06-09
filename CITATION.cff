@@ -1,0 +1,19 @@
+cff-version: 1.2.0
+message: "If you use RamPo in your research, please cite the archived Zenodo release."
+type: software
+title: "RamPo: Raman spectroscopy analysis software for high-pressure experiments"
+version: "0.7.2a0"
+date-released: "2026-05-04"
+abstract: "RamPo is a Python desktop application for processing Raman spectroscopy data, with workflows adapted for high-pressure Raman experiments."
+authors:
+  - family-names: Shim
+    given-names: "S.-H. Dan"
+repository-code: "https://github.com/SHDShim/RamPo"
+url: "https://github.com/SHDShim/RamPo"
+license: "GPL-3.0-only"
+keywords:
+  - Raman spectroscopy
+  - high-pressure experiments
+  - mineral physics
+  - Python
+  - PyQt

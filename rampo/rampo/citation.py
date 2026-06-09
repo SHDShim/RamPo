@@ -1,6 +1,7 @@
-"""Rampo citation placeholder."""
+"""RamPo citation text."""
 
 __citation__ = (
-    "Rampo - Raman spectroscopy analysis software derived from the PeakPo "
-    "workflow for high-pressure experiments."
+    "Shim, S.-H. Dan (2026). RamPo: Raman spectroscopy analysis software "
+    "for high-pressure experiments (Version 0.7.2a0) [Computer software]. "
+    "Zenodo."
 )

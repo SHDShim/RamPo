@@ -1,0 +1,27 @@
+{
+  "title": "RamPo: Raman spectroscopy analysis software for high-pressure experiments",
+  "upload_type": "software",
+  "description": "RamPo is a Python desktop application for processing Raman spectroscopy data, with workflows adapted for high-pressure Raman experiments.",
+  "creators": [
+    {
+      "name": "Shim, S.-H. Dan"
+    }
+  ],
+  "access_right": "open",
+  "license": "GPL-3.0-only",
+  "keywords": [
+    "Raman spectroscopy",
+    "high-pressure experiments",
+    "mineral physics",
+    "Python",
+    "PyQt"
+  ],
+  "related_identifiers": [
+    {
+      "identifier": "https://github.com/SHDShim/RamPo",
+      "relation": "isSupplementTo",
+      "scheme": "url",
+      "resource_type": "software"
+    }
+  ]
+}

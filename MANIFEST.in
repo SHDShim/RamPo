@@ -1,5 +1,8 @@
 include README.md
 include LICENSE
+include CITATION.cff
+include .zenodo.json
+recursive-include docs *.md
 recursive-include rampo/rampo/mplstyle *.mplstyle
 recursive-include rampo/rampo/assets *
 exclude .gitignore
