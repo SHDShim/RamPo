@@ -164,9 +164,11 @@ class SequenceController(object):
         self._preview_current_or_first_file()
         self._set_default_1d_full_range_roi()
         if self._roi_1d is not None:
-            self._compute_sequence()
-        else:
-            self._draw_sequence()
+            self._set_status(
+                f"Loaded {len(self._chi_files)} spectra. "
+                "Default full-range ROI is set; click Compute Seq or draw an ROI."
+            )
+        self._draw_sequence()
 
     def _filename_sort_key(self, filename):
         name = os.path.splitext(os.path.basename(filename))[0]
@@ -374,6 +376,15 @@ class SequenceController(object):
             return x, y
         return np.asarray(x, dtype=float), np.asarray(y, dtype=float)
 
+    def _integrate_roi_intensity(self, x, y, mask):
+        x_roi = np.asarray(x[mask], dtype=float)
+        y_roi = np.asarray(y[mask], dtype=float)
+        if x_roi.size == 1:
+            return float(y_roi[0])
+        if hasattr(np, "trapezoid"):
+            return float(np.trapezoid(y_roi, x_roi))
+        return float(np.trapz(y_roi, x_roi))
+
     def _compute_sequence(self):
         if not self._chi_files:
             self._set_status("Load SPE files first.")
@@ -392,7 +403,7 @@ class SequenceController(object):
                 if not np.any(m):
                     values[i] = np.nan
                 else:
-                    values[i] = float(np.nansum(y[m]))
+                    values[i] = self._integrate_roi_intensity(x, y, m)
             except Exception as exc:
                 failures.append((chi_path, str(exc)))
                 values[i] = np.nan

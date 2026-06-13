@@ -206,9 +206,11 @@ class MapController(object):
         self._preview_current_or_center_file()
         self._set_default_1d_full_range_roi()
         if self._roi_1d is not None:
-            self._compute_map()
-        else:
-            self._draw_map()
+            self._set_status(
+                f"Loaded {len(self._chi_files)} spectra. "
+                "Default full-range ROI is set; click Compute Map or draw an ROI."
+            )
+        self._draw_map()
 
     def _guess_grid_dims(self, n_files):
         if n_files <= 0:
@@ -447,6 +449,15 @@ class MapController(object):
     def _load_spectrum_xy(self, spectrum_path):
         return load_spectrum_xy(spectrum_path, self._chi_cache)
 
+    def _integrate_roi_intensity(self, x, y, mask):
+        x_roi = np.asarray(x[mask], dtype=float)
+        y_roi = np.asarray(y[mask], dtype=float)
+        if x_roi.size == 1:
+            return float(y_roi[0])
+        if hasattr(np, "trapezoid"):
+            return float(np.trapezoid(y_roi, x_roi))
+        return float(np.trapz(y_roi, x_roi))
+
     def _load_processed_xy(self, spectrum_path):
         spectrum = Spectrum(spectrum_path)
         if str(spectrum_path).lower().endswith(".spe"):
@@ -535,7 +546,7 @@ class MapController(object):
                 if not np.any(m):
                     values[i] = np.nan
                 else:
-                    values[i] = float(np.nansum(y[m]))
+                    values[i] = self._integrate_roi_intensity(x, y, m)
             except Exception as exc:
                 failures.append((chi_path, str(exc)))
                 values[i] = np.nan

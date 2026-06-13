@@ -251,10 +251,7 @@ class MainController(object):
             self.widget.pushButton_SpectrumRaw.clicked.connect(
                 self.reset_spectrum_smoothing_to_raw)
         self.widget.checkBox_LongCursor.stateChanged.connect(
-            self._handle_cursor_toggle)  # Changed from clicked to stateChanged
-        # ✅ ADD: Connect checkbox to deactivate toolbar
-        self.widget.checkBox_LongCursor.stateChanged.connect(
-            self._on_long_cursor_changed)
+            self._handle_cursor_toggle)
         self.widget.checkBox_ShowMillerIndices.clicked.connect(
             self.apply_changes_to_graph)
         self.widget.comboBox_BasePtnLineThickness.currentIndexChanged.connect(
@@ -297,9 +294,6 @@ class MainController(object):
         #self.widget.pushButton_toPkFt.clicked.connect(self.to_PkFt)
         #self.widget.pushButton_fromPkFt.clicked.connect(self.from_PkFt)
         self.widget.checkBox_NightView.clicked.connect(self.set_nightday_view)
-        if hasattr(self.widget, "comboBox_CCDColormap"):
-            self.widget.comboBox_CCDColormap.currentIndexChanged.connect(
-                self.apply_changes_to_graph)
         self.widget.pushButton_S_Zoom.clicked.connect(self.plot_new_graph)
         self.widget.checkBox_AutoY.clicked.connect(self.apply_changes_to_graph)
         self.widget.checkBox_BgSub.clicked.connect(self._on_bgsub_toggled)
@@ -316,12 +310,6 @@ class MainController(object):
             self._refresh_mouse_mode_availability)
         self.widget.tabWidget.currentChanged.connect(self._on_main_tab_changed)
         # self.widget.tabWidget.setTabEnabled(8, False)
-        if hasattr(self.widget, "doubleSpinBox_CCDScaleMin"):
-            self.widget.doubleSpinBox_CCDScaleMin.valueChanged.connect(
-                self.apply_changes_to_graph)
-        if hasattr(self.widget, "doubleSpinBox_CCDScaleMax"):
-            self.widget.doubleSpinBox_CCDScaleMax.valueChanged.connect(
-                self.apply_changes_to_graph)
         self.widget.horizontalSlider_CCDAxisSize.valueChanged.connect(
             self.apply_changes_to_graph)
         self.widget.horizontalSlider_JCPDSBarScale.valueChanged.connect(
@@ -542,7 +530,7 @@ class MainController(object):
         self._set_mouse_mode(mode)
 
     def _on_ccd_roi_selection_finished(self):
-        if self._mouse_mode == 'roi':
+        if self._mouse_mode == 'roi' and (not self._is_spectrum_tab_active()):
             self._set_mouse_mode('navigate')
 
     def _plot_roi_interaction_active(self):
@@ -642,10 +630,8 @@ class MainController(object):
                 # Deactivate zoom or pan if active
                 if current_mode in ('zoom rect', 'zoom'):
                     toolbar.zoom()  # Toggle zoom off
-                    print("  ✓ Zoom deactivated (cursor enabled)")
                 elif current_mode in ('pan/zoom', 'pan'):
                     toolbar.pan()   # Toggle pan off
-                    print("  ✓ Pan deactivated (cursor enabled)")
                 if hasattr(self.plot_ctrl, '_toolbar_active'):
                     self.plot_ctrl._toolbar_active = False
         

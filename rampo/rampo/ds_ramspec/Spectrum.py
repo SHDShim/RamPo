@@ -5,6 +5,7 @@ import datetime
 from ..utils import writechi, readchi, make_filename
 from ..model.SpeFile import SpeFile
 from .background import fit_bg_poly
+from .roiutils import get_data_section
 
 
 class Spectrum(object):
@@ -104,16 +105,18 @@ class Spectrum(object):
         return True
 
     def _get_section(self, x, y, roi):
-        if roi[0] >= x.min() and roi[1] <= x.max():
-            i_roimin = np.abs(x - roi[0]).argmin()
-            i_roimax = np.abs(x - roi[1]).argmin()
-            x_roi = x[i_roimin:i_roimax]
-            y_roi = y[i_roimin:i_roimax]
-            return x_roi, y_roi
-        else:
+        x_arr = np.asarray(x, dtype=float)
+        y_arr = np.asarray(y, dtype=float)
+        if x_arr.size == 0 or y_arr.size == 0:
+            return x_arr, y_arr
+        r0, r1 = float(roi[0]), float(roi[1])
+        if r0 > r1:
+            r0, r1 = r1, r0
+        if r0 < np.nanmin(x_arr) or r1 > np.nanmax(x_arr):
             print(str(datetime.datetime.now())[:-7], 
                 ": Error: ROI should be smaller than the data range")
-            return x, y
+            return x_arr, y_arr
+        return get_data_section(x_arr, y_arr, [r0, r1])
 
     def get_section(self, roi, bgsub=True):
         """
