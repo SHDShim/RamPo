@@ -1,25 +1,34 @@
-# Backup only the Rampo app tree.
-PeakPo/
-peakpo/
-T-rax-develop/
+# Skills (local agent workflows)
+skills/
 
-# Python
+# GitHub workflows and configs
+.github/
+
+# Byte-compiled / optimized / DLL files
 __pycache__/
 *.py[cod]
+*$py.class
+
+# C extensions
 *.so
+
+# Distribution / packaging
 build/
 dist/
 *.egg-info/
-.venv/
-.venv-publish/
-pip-wheel-metadata/
 
-# macOS
-.DS_Store
+# Environments
+.env
+.venv
+env/
+venv/
 
-# Editor settings
+# IDE
+.idea/
 .vscode/
+*.swp
+*.swo
 
-# Local runtime artifacts
-*.log
-error.log
+# OS
+.DS_Store
+Thumbs.db
