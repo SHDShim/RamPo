@@ -51,6 +51,15 @@ class CCDController(object):
         if hasattr(self.widget, "comboBox_CCDColormap"):
             self.widget.comboBox_CCDColormap.currentIndexChanged.connect(
                 self._apply_changes_to_graph)
+        if hasattr(self.widget, "checkBox_CCDLogScale"):
+            self.widget.checkBox_CCDLogScale.stateChanged.connect(
+                self._on_ccd_log_changed)
+        if hasattr(self.widget, "doubleSpinBox_CCDPctLow"):
+            self.widget.doubleSpinBox_CCDPctLow.valueChanged.connect(
+                self._set_ccd_hist_view_percentages)
+        if hasattr(self.widget, "doubleSpinBox_CCDPctHigh"):
+            self.widget.doubleSpinBox_CCDPctHigh.valueChanged.connect(
+                self._set_ccd_hist_view_percentages)
         if hasattr(self.widget, "doubleSpinBox_CCDScaleMin"):
             self.widget.doubleSpinBox_CCDScaleMin.valueChanged.connect(
                 self._on_ccd_scale_spin_changed)
@@ -60,6 +69,8 @@ class CCDController(object):
         if hasattr(self.widget, "ccd_hist_widget"):
             self.widget.ccd_hist_widget.boundChanged.connect(
                 self._set_ccd_bound_from_hist)
+            self.widget.ccd_hist_widget.rangeChanged.connect(
+                self._set_ccd_range_from_hist)
         """
         self.widget.pushButton_Load_CCDFormatFile.clicked.connect(
             self.load_ccd_format_file)
@@ -499,7 +510,9 @@ class CCDController(object):
         ax_ccd = getattr(ax_ccd, "ax_ccd", None)
         if ax_ccd is not None:
             try:
-                image_arr = getattr(ax_ccd, "_rampo_ccd_z", None)
+                image_arr = getattr(ax_ccd, "_rampo_ccd_z_raw", None)
+                if image_arr is None:
+                    image_arr = getattr(ax_ccd, "_rampo_ccd_z", None)
                 if image_arr is None and getattr(ax_ccd, "images", None):
                     image_arr = ax_ccd.images[-1].get_array()
                 if image_arr is not None:
@@ -512,6 +525,12 @@ class CCDController(object):
         if arr.size == 0:
             intensity_ccd, _, _ = self.model.diff_img.get_ccd()
             arr = np.asarray(intensity_ccd, dtype=float).ravel()
+        if bool(getattr(self.widget, "checkBox_CCDLogScale", None) and
+                self.widget.checkBox_CCDLogScale.isChecked()):
+            arr = arr[arr > 0]
+            if arr.size == 0:
+                return None
+            arr = np.log10(arr)
         arr = arr[np.isfinite(arr)]
         if arr.size == 0:
             return None
@@ -531,11 +550,37 @@ class CCDController(object):
     def _apply_changes_to_graph(self):
         self.plot_ctrl.update()
 
+    def _on_ccd_log_changed(self):
+        self.apply_auto_ccd_scale(refresh_plot=False)
+        self._apply_changes_to_graph()
+
     def _set_ccd_bound_from_hist(self, bound_type, intensity_value):
+        value = float(intensity_value)
+        current_min = float(self.widget.doubleSpinBox_CCDScaleMin.value())
+        current_max = float(self.widget.doubleSpinBox_CCDScaleMax.value())
+        min_gap = max(1e-12, abs(current_max - current_min) * 1e-9)
         if bound_type == "min":
-            self.widget.doubleSpinBox_CCDScaleMin.setValue(float(intensity_value))
+            if value >= current_max:
+                value = current_max - min_gap
+            self.widget.doubleSpinBox_CCDScaleMin.setValue(value)
         elif bound_type == "max":
-            self.widget.doubleSpinBox_CCDScaleMax.setValue(float(intensity_value))
+            if value <= current_min:
+                value = current_min + min_gap
+            self.widget.doubleSpinBox_CCDScaleMax.setValue(value)
+
+    def _set_ccd_range_from_hist(self, vmin, vmax):
+        self._set_ccd_scale_spinboxes(float(vmin), float(vmax))
+        self._apply_changes_to_graph()
+
+    def _set_ccd_hist_view_percentages(self):
+        if not hasattr(self.widget, "ccd_hist_widget"):
+            return
+        if not hasattr(self.widget.ccd_hist_widget, "set_view_percentages"):
+            return
+        self.widget.ccd_hist_widget.set_view_percentages(
+            self.widget.doubleSpinBox_CCDPctLow.value(),
+            self.widget.doubleSpinBox_CCDPctHigh.value(),
+        )
 
     def _set_ccd_scale_spinboxes(self, vmin, vmax):
         if not hasattr(self.widget, "doubleSpinBox_CCDScaleMin"):

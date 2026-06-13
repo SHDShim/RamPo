@@ -881,7 +881,7 @@ class SessionController(object):
             prefer_raw=bool(
                 getattr(self.widget, "checkBox_PreferRawSpe", None) and
                 self.widget.checkBox_PreferRawSpe.isChecked()),
-            include_chi=True,
+            include_chi=False,
             include_manifest=True,
             label="Session files",
             multi=False)

@@ -7,7 +7,7 @@ from qtpy import QtWidgets, QtCore
 from matplotlib.figure import Figure
 from matplotlib.backends.backend_qtagg import FigureCanvasQTAgg
 from matplotlib.widgets import RectangleSelector
-from matplotlib import colors as mcolors
+from matplotlib import cm
 import matplotlib.patches as mpatches
 
 from .ramaniohelpers import (
@@ -100,11 +100,20 @@ class MapController(object):
         self.widget.checkBox_MapReverseCmap.stateChanged.connect(self._draw_map)
         self.widget.doubleSpinBox_MapVmin.valueChanged.connect(self._draw_map)
         self.widget.doubleSpinBox_MapVmax.valueChanged.connect(self._draw_map)
-        self.widget.checkBox_MapLog.stateChanged.connect(self._draw_map)
+        self.widget.checkBox_MapLog.stateChanged.connect(self._on_map_log_changed)
+        self.widget.doubleSpinBox_MapPctLow.valueChanged.connect(
+            self._set_map_hist_view_percentages)
+        self.widget.doubleSpinBox_MapPctHigh.valueChanged.connect(
+            self._set_map_hist_view_percentages)
 
         self.widget.pushButton_MapScaleAuto.clicked.connect(self._auto_scale)
         self.widget.pushButton_MapScalePercentile.clicked.connect(self._scale_percentile)
         self.widget.pushButton_MapScaleReset.clicked.connect(self._scale_reset)
+        if hasattr(self.widget, "map_hist_widget"):
+            self.widget.map_hist_widget.boundChanged.connect(
+                self._set_map_bound_from_hist)
+            self.widget.map_hist_widget.rangeChanged.connect(
+                self._set_map_range_from_hist)
 
         self.widget.pushButton_MapExportNpy.clicked.connect(self._export_npy)
 
@@ -179,7 +188,7 @@ class MapController(object):
             prefer_raw=bool(
                 getattr(self.widget, "checkBox_PreferRawSpe", None) and
                 self.widget.checkBox_PreferRawSpe.isChecked()),
-            include_chi=True,
+            include_chi=False,
             label="Spectra",
             multi=True,
             hide_rampo_dirs=True)
@@ -579,20 +588,47 @@ class MapController(object):
             cmap = cmap + "_r"
         return cmap
 
+    def _map_cmap_for_plot(self):
+        cmap = cm.get_cmap(self._effective_cmap()).copy()
+        cmap.set_bad((0.0, 0.0, 0.0, 0.0))
+        return cmap
+
     def _current_vrange(self, data):
         finite = data[np.isfinite(data)]
         if finite.size == 0:
             return None
         return float(np.nanmin(finite)), float(np.nanmax(finite))
 
+    def _display_map_data(self):
+        if self._map_data is None:
+            return None
+        data = np.array(self._map_data, copy=True, dtype=float)
+        if not self.widget.checkBox_MapLog.isChecked():
+            return data
+        finite = data[np.isfinite(data)]
+        pos = finite[finite > 0]
+        if pos.size == 0:
+            self._set_status("Log scale disabled: map has no positive values.")
+            self.widget.checkBox_MapLog.setChecked(False)
+            return data
+        data[data <= 0] = np.nan
+        return np.log10(data)
+
     def _scale_reset(self):
         if self._map_data is None:
             return
-        vr = self._current_vrange(self._map_data)
+        data = self._display_map_data()
+        if data is None:
+            return
+        vr = self._current_vrange(data)
         if vr is None:
             return
         self.widget.doubleSpinBox_MapVmin.setValue(vr[0])
         self.widget.doubleSpinBox_MapVmax.setValue(vr[1])
+
+    def _on_map_log_changed(self):
+        self._scale_reset()
+        self._draw_map()
 
     def _auto_scale(self):
         self._scale_reset()
@@ -615,54 +651,78 @@ class MapController(object):
         self.widget.doubleSpinBox_MapVmax.setValue(vmax)
         self._draw_map()
 
+    def _set_map_bound_from_hist(self, bound_type, intensity_value):
+        value = float(intensity_value)
+        current_min = float(self.widget.doubleSpinBox_MapVmin.value())
+        current_max = float(self.widget.doubleSpinBox_MapVmax.value())
+        min_gap = max(1e-12, abs(current_max - current_min) * 1e-9)
+        if bound_type == "min":
+            if value >= current_max:
+                value = current_max - min_gap
+            self.widget.doubleSpinBox_MapVmin.setValue(value)
+        elif bound_type == "max":
+            if value <= current_min:
+                value = current_min + min_gap
+            self.widget.doubleSpinBox_MapVmax.setValue(value)
+
+    def _set_map_range_from_hist(self, vmin, vmax):
+        vmin = float(vmin)
+        vmax = float(vmax)
+        if vmax < vmin:
+            vmin, vmax = vmax, vmin
+        blocker_min = QtCore.QSignalBlocker(self.widget.doubleSpinBox_MapVmin)
+        blocker_max = QtCore.QSignalBlocker(self.widget.doubleSpinBox_MapVmax)
+        try:
+            self.widget.doubleSpinBox_MapVmin.setValue(vmin)
+            self.widget.doubleSpinBox_MapVmax.setValue(vmax)
+        finally:
+            del blocker_max
+            del blocker_min
+        self._draw_map()
+
+    def _set_map_hist_view_percentages(self):
+        if not hasattr(self.widget, "map_hist_widget"):
+            return
+        self.widget.map_hist_widget.set_view_percentages(
+            self.widget.doubleSpinBox_MapPctLow.value(),
+            self.widget.doubleSpinBox_MapPctHigh.value(),
+        )
+
     def _draw_map(self):
         # Recreate axes each draw so colorbar layout adjustments do not accumulate.
         self._recreate_map_axes()
         if self._map_ax is None:
             return
         self._map_ax.clear()
+        self._map_fig.patch.set_facecolor("black")
+        self._map_ax.set_facecolor("black")
         self._map_cbar = None
         if self._map_data is None:
             self._map_ax.set_axis_off()
             self._clear_hover_filename()
+            if hasattr(self.widget, "map_hist_widget"):
+                self.widget.map_hist_widget.clear()
             self._map_canvas.draw_idle()
             return
 
-        data = np.array(self._map_data, copy=True)
+        data = self._display_map_data()
+        if data is None:
+            return
         vmin = float(self.widget.doubleSpinBox_MapVmin.value())
         vmax = float(self.widget.doubleSpinBox_MapVmax.value())
-
-        norm = None
-        label = "Integrated intensity"
-        if self.widget.checkBox_MapLog.isChecked():
-            finite = data[np.isfinite(data)]
-            if finite.size == 0 or np.nanmax(finite) <= 0:
-                self._set_status("Log scale disabled: map has no positive values.")
-                self.widget.checkBox_MapLog.setChecked(False)
-            else:
-                min_pos = np.nanmin(finite[finite > 0]) if np.any(finite > 0) else np.nan
-                if (not np.isfinite(min_pos)):
-                    self._set_status("Log scale disabled: map has no positive values.")
-                    self.widget.checkBox_MapLog.setChecked(False)
-                else:
-                    data[data <= 0] = np.nan
-                    if vmin <= 0:
-                        vmin = min_pos
-                    vmax = max(vmax, vmin * 1.001)
-                    norm = mcolors.LogNorm(vmin=vmin, vmax=vmax)
-                    label = "log10(Integrated intensity)"
+        if vmax <= vmin:
+            vr = self._current_vrange(data)
+            if vr is not None:
+                vmin, vmax = vr
 
         im_kwargs = {
             "origin": "lower",
-            "cmap": self._effective_cmap(),
+            "cmap": self._map_cmap_for_plot(),
             "extent": [-0.5, data.shape[1] - 0.5, -0.5, data.shape[0] - 0.5],
             "interpolation": "nearest",
+            "vmin": vmin,
+            "vmax": vmax,
         }
-        if norm is None:
-            im_kwargs["vmin"] = vmin
-            im_kwargs["vmax"] = vmax
-        else:
-            im_kwargs["norm"] = norm
         self._map_im = self._map_ax.imshow(data, **im_kwargs)
         self._map_cbar = self._map_fig.colorbar(
             self._map_im, ax=self._map_ax, pad=0.0075, fraction=0.046
@@ -673,6 +733,12 @@ class MapController(object):
             left=False, right=False, labelleft=False, labelright=False,
             bottom=False, top=False, labelbottom=False, labeltop=False
         )
+        if hasattr(self.widget, "map_hist_widget"):
+            self.widget.map_hist_widget.set_view_percentages(
+                self.widget.doubleSpinBox_MapPctLow.value(),
+                self.widget.doubleSpinBox_MapPctHigh.value(),
+            )
+            self.widget.map_hist_widget.set_data(data, vmin=vmin, vmax=vmax)
 
         self._map_ax.set_aspect("equal", adjustable="box")
         self._map_ax.set_anchor("C")
@@ -779,7 +845,6 @@ class MapController(object):
         script = (
             "import numpy as np\n"
             "import matplotlib.pyplot as plt\n\n"
-            "from matplotlib import colors as mcolors\n\n"
             "def main():\n"
             "    data = np.load('map.npy')\n"
             "    fig, ax = plt.subplots(figsize=(7, 5), facecolor='white')\n"
@@ -802,13 +867,9 @@ class MapController(object):
             "        else:\n"
             "            data = np.array(data, copy=True)\n"
             "            data[data <= 0] = np.nan\n"
-            "            if vmin <= 0:\n"
-            "                vmin = float(np.nanmin(pos))\n"
-            "            vmax = max(vmax, vmin * 1.001)\n"
-            "            im_kwargs['norm'] = mcolors.LogNorm(vmin=vmin, vmax=vmax)\n"
-            "    if 'norm' not in im_kwargs:\n"
-            "        im_kwargs['vmin'] = vmin\n"
-            "        im_kwargs['vmax'] = vmax\n"
+            "            data = np.log10(data)\n"
+            "    im_kwargs['vmin'] = vmin\n"
+            "    im_kwargs['vmax'] = vmax\n"
             "    im = ax.imshow(data, **im_kwargs)\n"
             "    cbar = fig.colorbar(im, ax=ax, pad=0.0075, fraction=0.046)\n"
             "    cbar.set_label('')\n"

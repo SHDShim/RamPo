@@ -185,7 +185,7 @@ class WaterfallController(object):
             prefer_raw=bool(
                 getattr(self.widget, "checkBox_PreferRawSpe", None) and
                 self.widget.checkBox_PreferRawSpe.isChecked()),
-            include_chi=True,
+            include_chi=False,
             label="Data files",
             multi=True)
         self._add_patterns(files)

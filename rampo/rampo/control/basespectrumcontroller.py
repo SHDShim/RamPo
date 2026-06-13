@@ -30,12 +30,12 @@ class BaseSpectrumController(object):
         """
         filen = open_spectrum_file_dialog(
             self.widget,
-            "Open an SPE or CHI File",
+            "Open an SPE File",
             self.model.chi_path,
             prefer_raw=bool(
                 getattr(self.widget, "checkBox_PreferRawSpe", None) and
                 self.widget.checkBox_PreferRawSpe.isChecked()),
-            include_chi=True,
+            include_chi=False,
             label="Data files",
             multi=False)
         self._setshow_new_base_ptn(str(filen))

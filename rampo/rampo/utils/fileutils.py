@@ -160,7 +160,7 @@ def get_preferred_spe_patterns(path, prefer_raw=False):
 def build_spectrum_name_filter(
         path,
         prefer_raw=False,
-        include_chi=True,
+        include_chi=False,
         include_manifest=False,
         label="Spectra"):
     patterns = []
@@ -177,11 +177,11 @@ def open_spectrum_file_dialog(
         title,
         start_dir,
         prefer_raw=False,
-        include_chi=True,
+        include_chi=False,
         include_manifest=False,
         label="Spectra",
         multi=False,
-        hide_rampo_dirs=False):
+        hide_rampo_dirs=True):
     dialog = QtWidgets.QFileDialog(parent, title, start_dir or "")
     dialog.setOption(QtWidgets.QFileDialog.DontUseNativeDialog, True)
     dialog.setFileMode(
@@ -190,9 +190,22 @@ def open_spectrum_file_dialog(
 
     hidden_suffixes = ("-rampo",) if hide_rampo_dirs else ()
 
-    def _is_hidden_dir(name):
+    # Attach "Hide *-rampo" checkbox to the dialog layout
+    checkbox = QtWidgets.QCheckBox("Hide *-rampo folders in file chooser", dialog)
+    checkbox.setChecked(bool(hide_rampo_dirs))
+    layout = dialog.layout()
+    if isinstance(layout, QtWidgets.QGridLayout):
+        row = layout.rowCount()
+        layout.addWidget(checkbox, row, 0, 1, layout.columnCount())
+    elif layout is not None:
+        layout.addWidget(checkbox)
+
+    def _get_hidden_suffixes():
+        return ("-rampo",) if checkbox.isChecked() else ()
+
+    def _is_hidden_dir(name, suffixes):
         name = str(name or "").lower()
-        return any(name.endswith(suffix) for suffix in hidden_suffixes)
+        return any(name.endswith(suffix) for suffix in suffixes)
 
     def _source_index(model, index):
         source_model = model
@@ -229,7 +242,7 @@ def open_spectrum_file_dialog(
                             folder_name = str(source_model.fileName(source_index) or folder_name)
                         except Exception:
                             pass
-                should_hide = bool(is_dir and _is_hidden_dir(folder_name))
+                should_hide = bool(is_dir and _is_hidden_dir(folder_name, _get_hidden_suffixes()))
                 if isinstance(view, QtWidgets.QTreeView):
                     view.setRowHidden(row, root_index, should_hide)
                 elif hasattr(view, "setRowHidden"):
@@ -253,12 +266,16 @@ def open_spectrum_file_dialog(
         )
         dialog.setNameFilter(name_filter)
         dialog.selectNameFilter(name_filter)
-        if hidden_suffixes:
+        if _get_hidden_suffixes():
             _schedule_hide_irrelevant_rows()
 
     _update_name_filter(start_dir)
     dialog.directoryEntered.connect(_update_name_filter)
-    if hidden_suffixes:
+
+    # Connect checkbox toggled signal to refresh hide state
+    checkbox.toggled.connect(_schedule_hide_irrelevant_rows)
+
+    if checkbox.isChecked():
         _schedule_hide_irrelevant_rows()
 
     if dialog.exec():

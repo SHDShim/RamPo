@@ -179,7 +179,7 @@ class DiffController(object):
             prefer_raw=bool(
                 getattr(self.widget, "checkBox_PreferRawSpe", None) and
                 self.widget.checkBox_PreferRawSpe.isChecked()),
-            include_chi=True,
+            include_chi=False,
             label="Spectra",
             multi=False)
         if filen == "":

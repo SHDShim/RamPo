@@ -590,6 +590,22 @@ class MplController(object):
         """
 
         # Colormap + mask handling.
+        render_int = np.array(int_plot, copy=True, dtype=float)
+        use_ccd_log = bool(
+            (not diff_mode) and
+            getattr(self.widget, "checkBox_CCDLogScale", None) and
+            self.widget.checkBox_CCDLogScale.isChecked()
+        )
+        if use_ccd_log:
+            finite_raw = render_int[np.isfinite(render_int)]
+            pos = finite_raw[finite_raw > 0]
+            if pos.size == 0:
+                self.widget.checkBox_CCDLogScale.setChecked(False)
+                use_ccd_log = False
+            else:
+                render_int[render_int <= 0] = np.nan
+                render_int = np.log10(render_int)
+
         if diff_mode and (self.diff_ctrl is not None):
             cfg = self.diff_ctrl.get_ccd_render_config(int_plot) or {}
             cmap = plt.get_cmap(cfg.get("cmap", "RdBu_r")).copy()
@@ -605,24 +621,25 @@ class MplController(object):
             cmap.set_bad(color=(0.0, 0.0, 0.0, 0.0))
         else:
             # Non-diff mode uses user-selected colormap from Plot > Control.
-            cmap_name = "gray_r"
+            cmap_name = "viridis"
             if hasattr(self.widget, "comboBox_CCDColormap"):
-                cmap_name = str(self.widget.comboBox_CCDColormap.currentText() or "gray_r")
+                cmap_name = str(self.widget.comboBox_CCDColormap.currentText() or "viridis")
             cmap = plt.get_cmap(cmap_name).copy()
             norm = None
             # 0-values are typically masked pixels in ccd data.
             zero_mask = (int_plot == 0)
-            # Opaque pale yellow for masked pixels.
-            cmap.set_bad(color=(1.0, 0.97, 0.55, 1.0))
+            if use_ccd_log:
+                zero_mask = zero_mask | (int_plot <= 0)
+            cmap.set_bad(color=(0.0, 0.0, 0.0, 0.0))
 
         mask = self.model.diff_img.get_mask()
         use_user_mask = (self.widget.pushButton_ApplyMask.isChecked() and
                          (mask is not None) and np.any(mask))
         if use_user_mask:
-            combined_mask = zero_mask | mask | ~np.isfinite(int_plot)
+            combined_mask = zero_mask | mask | ~np.isfinite(render_int)
         else:
-            combined_mask = zero_mask | ~np.isfinite(int_plot)
-        int_new = ma.masked_where(combined_mask, int_plot, copy=False)
+            combined_mask = zero_mask | ~np.isfinite(render_int)
+        int_new = ma.masked_where(combined_mask, render_int, copy=False)
 
 
         x_edges = self._axis_centers_to_edges(tth_ccd)
@@ -645,8 +662,15 @@ class MplController(object):
         ax_ccd.yaxis.set_major_locator(MaxNLocator(integer=True))
         ax_ccd._rampo_ccd_x = np.asarray(tth_ccd, dtype=float)
         ax_ccd._rampo_ccd_y = np.asarray(chi_ccd, dtype=float)
+        ax_ccd._rampo_ccd_z_raw = np.asarray(int_plot, dtype=float)
         ax_ccd._rampo_ccd_z = int_new
         if hasattr(self.widget, "ccd_hist_widget"):
+            if hasattr(self.widget, "doubleSpinBox_CCDPctLow") and \
+                    hasattr(self.widget.ccd_hist_widget, "set_view_percentages"):
+                self.widget.ccd_hist_widget.set_view_percentages(
+                    self.widget.doubleSpinBox_CCDPctLow.value(),
+                    self.widget.doubleSpinBox_CCDPctHigh.value(),
+                )
             self.widget.ccd_hist_widget.set_data(
                 int_new, vmin=float(climits[0]), vmax=float(climits[1]))
 

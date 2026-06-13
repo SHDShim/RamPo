@@ -84,3 +84,7 @@ The preferred shell is `zsh`.
 
 Use shell commands that are reproducible and explicit about the `dev26a`
 environment when Python behavior depends on installed packages.
+
+## External Dependencies
+
+A symbolic link to the `PeakPo` repository is provided at `/Users/danshim/Git-Workspace/science-python/RamPo/PeakPo`. Agents should use this link to read or modify code in the `PeakPo` repository as needed.

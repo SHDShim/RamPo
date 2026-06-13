@@ -2,6 +2,7 @@ import os
 from qtpy import QtCore, QtWidgets
 from .qtd import Ui_MainWindow
 from .ccdhistwidget import CCDHistogramWidget
+from .maphistwidget import MapHistogramWidget
 from ..utils import SpinBoxFixStyle
 from ..version import __version__
 from ..citation import __citation__
@@ -734,15 +735,15 @@ class MainWindow(QtWidgets.QMainWindow, Ui_MainWindow):
 
     def _setup_ccd_scale_layout(self):
         self.groupBox_29.setTitle("CCD scale")
-        self.groupBox_29.setMinimumHeight(300)
-        self.groupBox_29.setMaximumHeight(520)
+        self.groupBox_29.setMinimumHeight(260)
+        self.groupBox_29.setMaximumHeight(420)
         self.pushButton_ResetCCDScale.setText("Reset")
         self.pushButton_ResetCCDScale.setMinimumHeight(25)
         self.pushButton_ResetCCDScale.setMaximumHeight(25)
 
-        self.ccd_hist_widget = CCDHistogramWidget(self.groupBox_29)
-        self.ccd_hist_widget.setMinimumHeight(280)
-        self.ccd_hist_widget.setMaximumHeight(300)
+        self.ccd_hist_widget = MapHistogramWidget(self.groupBox_29)
+        self.ccd_hist_widget.setMinimumHeight(125)
+        self.ccd_hist_widget.setMaximumHeight(155)
 
         # Hide legacy controls replaced by direct min/max + histogram controls.
         self.label_8.setVisible(False)
@@ -760,7 +761,7 @@ class MainWindow(QtWidgets.QMainWindow, Ui_MainWindow):
             if w is not None:
                 w.setParent(self.groupBox_29)
 
-        # Top block: start with Min/Max, then log and colormap.
+        # Match the Map Colors control model: histogram plus colormap/log/percent controls.
         self.frame_CCDTopGrid = QtWidgets.QFrame(self.groupBox_29)
         self.frame_CCDTopGrid.setObjectName("frame_CCDTopGrid")
         self.frame_CCDTopGrid.setSizePolicy(
@@ -770,37 +771,47 @@ class MainWindow(QtWidgets.QMainWindow, Ui_MainWindow):
         self.gridLayout_CCDTop.setHorizontalSpacing(10)
         self.gridLayout_CCDTop.setVerticalSpacing(10)
 
-        self.ccd_hist_widget.check_log.setParent(self.frame_CCDTopGrid)
-        self.ccd_hist_widget.check_focus.setVisible(False)
-        self.ccd_hist_widget.label_low.setVisible(False)
-        self.ccd_hist_widget.spin_low_pct.setVisible(False)
-        self.ccd_hist_widget.label_high.setVisible(False)
-        self.ccd_hist_widget.spin_high_pct.setVisible(False)
-        self.ccd_hist_widget.button_apply_pct.setVisible(False)
-
         self.label_CCDScaleMin = QtWidgets.QLabel("Min", self.frame_CCDTopGrid)
         self.doubleSpinBox_CCDScaleMin = QtWidgets.QDoubleSpinBox(self.frame_CCDTopGrid)
         self.doubleSpinBox_CCDScaleMin.setObjectName("doubleSpinBox_CCDScaleMin")
-        self.doubleSpinBox_CCDScaleMin.setDecimals(2)
+        self.doubleSpinBox_CCDScaleMin.setDecimals(6)
         self.doubleSpinBox_CCDScaleMin.setRange(-1.0e12, 1.0e12)
         self.doubleSpinBox_CCDScaleMin.setMinimumHeight(25)
         self.doubleSpinBox_CCDScaleMin.setKeyboardTracking(False)
         self.doubleSpinBox_CCDScaleMin.setAlignment(QtCore.Qt.AlignRight)
+        self.label_CCDScaleMin.setVisible(False)
+        self.doubleSpinBox_CCDScaleMin.setVisible(False)
 
         self.label_CCDScaleMax = QtWidgets.QLabel("Max", self.frame_CCDTopGrid)
         self.doubleSpinBox_CCDScaleMax = QtWidgets.QDoubleSpinBox(self.frame_CCDTopGrid)
         self.doubleSpinBox_CCDScaleMax.setObjectName("doubleSpinBox_CCDScaleMax")
-        self.doubleSpinBox_CCDScaleMax.setDecimals(2)
+        self.doubleSpinBox_CCDScaleMax.setDecimals(6)
         self.doubleSpinBox_CCDScaleMax.setRange(-1.0e12, 1.0e12)
         self.doubleSpinBox_CCDScaleMax.setMinimumHeight(25)
         self.doubleSpinBox_CCDScaleMax.setKeyboardTracking(False)
         self.doubleSpinBox_CCDScaleMax.setAlignment(QtCore.Qt.AlignRight)
+        self.label_CCDScaleMax.setVisible(False)
+        self.doubleSpinBox_CCDScaleMax.setVisible(False)
 
-        self.gridLayout_CCDTop.addWidget(self.label_CCDScaleMin, 0, 0, 1, 1)
-        self.gridLayout_CCDTop.addWidget(self.doubleSpinBox_CCDScaleMin, 0, 1, 1, 1)
-        self.gridLayout_CCDTop.addWidget(self.label_CCDScaleMax, 0, 2, 1, 1)
-        self.gridLayout_CCDTop.addWidget(self.doubleSpinBox_CCDScaleMax, 0, 3, 1, 1)
-        self.gridLayout_CCDTop.addWidget(self.ccd_hist_widget.check_log, 1, 0, 1, 1)
+        self.checkBox_CCDLogScale = QtWidgets.QCheckBox("Log scale", self.frame_CCDTopGrid)
+        self.checkBox_CCDLogScale.setObjectName("checkBox_CCDLogScale")
+        self.label_CCDPctLow = QtWidgets.QLabel("Low %", self.frame_CCDTopGrid)
+        self.doubleSpinBox_CCDPctLow = QtWidgets.QDoubleSpinBox(self.frame_CCDTopGrid)
+        self.doubleSpinBox_CCDPctLow.setObjectName("doubleSpinBox_CCDPctLow")
+        self.doubleSpinBox_CCDPctLow.setDecimals(2)
+        self.doubleSpinBox_CCDPctLow.setRange(0.0, 100.0)
+        self.doubleSpinBox_CCDPctLow.setValue(0.0)
+        self.label_CCDPctHigh = QtWidgets.QLabel("High %", self.frame_CCDTopGrid)
+        self.doubleSpinBox_CCDPctHigh = QtWidgets.QDoubleSpinBox(self.frame_CCDTopGrid)
+        self.doubleSpinBox_CCDPctHigh.setObjectName("doubleSpinBox_CCDPctHigh")
+        self.doubleSpinBox_CCDPctHigh.setDecimals(2)
+        self.doubleSpinBox_CCDPctHigh.setRange(0.0, 100.0)
+        self.doubleSpinBox_CCDPctHigh.setValue(100.0)
+        for spin in (self.doubleSpinBox_CCDPctLow, self.doubleSpinBox_CCDPctHigh):
+            spin.setMinimumWidth(110)
+            spin.setMaximumWidth(110)
+            spin.setSizePolicy(
+                QtWidgets.QSizePolicy.Fixed, QtWidgets.QSizePolicy.Fixed)
 
         if hasattr(self, "groupBox_CCDColormap"):
             self.groupBox_CCDColormap.setVisible(False)
@@ -808,28 +819,50 @@ class MainWindow(QtWidgets.QMainWindow, Ui_MainWindow):
             self.label_CCDColormap.setVisible(False)
         if hasattr(self, "comboBox_CCDColormap"):
             self.comboBox_CCDColormap.setParent(self.frame_CCDTopGrid)
-            self.comboBox_CCDColormap.setMinimumHeight(25)
-            target_w = 160
-            self.comboBox_CCDColormap.setMinimumWidth(target_w)
-            self.comboBox_CCDColormap.setMaximumWidth(target_w)
+            self.comboBox_CCDColormap.clear()
+            self.comboBox_CCDColormap.addItems([
+                "Reds",
+                "Blues",
+                "Greens",
+                "gray",
+                "viridis",
+                "magma",
+                "inferno",
+                "cividis",
+                "turbo",
+            ])
+            self.comboBox_CCDColormap.setCurrentText("viridis")
+            self.comboBox_CCDColormap.setMinimumSize(QtCore.QSize(120, 28))
+            self.comboBox_CCDColormap.setMaximumWidth(150)
             self.comboBox_CCDColormap.setSizePolicy(
                 QtWidgets.QSizePolicy.Fixed, QtWidgets.QSizePolicy.Fixed)
-            self.gridLayout_CCDTop.addWidget(self.comboBox_CCDColormap, 1, 1, 1, 2)
 
-        self.pushButton_ResetCCDScale.setParent(self.frame_CCDTopGrid)
-        self.gridLayout_CCDTop.addWidget(self.pushButton_ResetCCDScale, 1, 3, 1, 1)
+        self.pushButton_ResetCCDScale.setVisible(False)
+        self.gridLayout_CCDTop.addWidget(self.ccd_hist_widget, 0, 0, 1, 5)
+        if hasattr(self, "comboBox_CCDColormap"):
+            self.gridLayout_CCDTop.addWidget(self.comboBox_CCDColormap, 1, 0, 1, 2)
+        self.gridLayout_CCDTop.addWidget(self.checkBox_CCDLogScale, 2, 0, 1, 2)
+        self.gridLayout_CCDTop.addWidget(self.label_CCDPctLow, 1, 2, 1, 1)
+        self.gridLayout_CCDTop.addWidget(self.doubleSpinBox_CCDPctLow, 1, 3, 1, 1)
+        self.gridLayout_CCDTop.addWidget(self.label_CCDPctHigh, 2, 2, 1, 1)
+        self.gridLayout_CCDTop.addWidget(self.doubleSpinBox_CCDPctHigh, 2, 3, 1, 1)
         self.gridLayout_CCDTop.setColumnStretch(1, 1)
         self.gridLayout_CCDTop.setColumnStretch(3, 1)
-        self.gridLayout_CCDTop.setRowStretch(0, 0)
-        self.gridLayout_CCDTop.setRowStretch(1, 0)
-
-        # Histogram plot
-        self.ccd_hist_widget.canvas.setParent(self.groupBox_29)
 
         self.verticalLayout_11.setContentsMargins(10, 8, 10, 0)
         self.verticalLayout_11.setSpacing(10)
         self.verticalLayout_11.addWidget(self.frame_CCDTopGrid)
-        self.verticalLayout_11.addWidget(self.ccd_hist_widget.canvas, 1)
+
+        # Compatibility aliases for session code that previously stored CCD histogram state.
+        self.ccd_hist_widget.check_log = self.checkBox_CCDLogScale
+        self.ccd_hist_widget.spin_low_pct = self.doubleSpinBox_CCDPctLow
+        self.ccd_hist_widget.spin_high_pct = self.doubleSpinBox_CCDPctHigh
+        self.ccd_hist_widget.check_focus = QtWidgets.QCheckBox(self.groupBox_29)
+        self.ccd_hist_widget.check_focus.setVisible(False)
+        self.ccd_hist_widget.label_low = self.label_CCDPctLow
+        self.ccd_hist_widget.label_high = self.label_CCDPctHigh
+        self.ccd_hist_widget.button_apply_pct = QtWidgets.QPushButton(self.groupBox_29)
+        self.ccd_hist_widget.button_apply_pct.setVisible(False)
 
     def _setup_ccd_colormap_control(self):
         if not hasattr(self, "verticalLayout_PlotControl"):
@@ -1257,27 +1290,33 @@ class MainWindow(QtWidgets.QMainWindow, Ui_MainWindow):
             "cividis",
             "turbo",
         ])
-        self.comboBox_MapCmap.setCurrentText("Reds")
+        self.comboBox_MapCmap.setCurrentText("viridis")
         self.comboBox_MapCmap.setMinimumSize(QtCore.QSize(120, 28))
         self.comboBox_MapCmap.setMaximumWidth(150)
         self.checkBox_MapReverseCmap = QtWidgets.QCheckBox("Reverse", self.groupBox_MapScale)
         self.checkBox_MapReverseCmap.setObjectName("checkBox_MapReverseCmap")
+        self.checkBox_MapReverseCmap.setChecked(False)
+        self.checkBox_MapReverseCmap.setVisible(False)
         self.checkBox_MapLog = QtWidgets.QCheckBox("Log scale", self.groupBox_MapScale)
         self.checkBox_MapLog.setObjectName("checkBox_MapLog")
         self.label_MapVmin = QtWidgets.QLabel("Min", self.groupBox_MapScale)
         self.doubleSpinBox_MapVmin = QtWidgets.QDoubleSpinBox(self.groupBox_MapScale)
         self.doubleSpinBox_MapVmin.setObjectName("doubleSpinBox_MapVmin")
-        self.doubleSpinBox_MapVmin.setDecimals(2)
+        self.doubleSpinBox_MapVmin.setDecimals(6)
         self.doubleSpinBox_MapVmin.setMinimum(-1e12)
         self.doubleSpinBox_MapVmin.setMaximum(1e12)
         self.doubleSpinBox_MapVmin.setMinimumSize(QtCore.QSize(100, 28))
+        self.label_MapVmin.setVisible(False)
+        self.doubleSpinBox_MapVmin.setVisible(False)
         self.label_MapVmax = QtWidgets.QLabel("Max", self.groupBox_MapScale)
         self.doubleSpinBox_MapVmax = QtWidgets.QDoubleSpinBox(self.groupBox_MapScale)
         self.doubleSpinBox_MapVmax.setObjectName("doubleSpinBox_MapVmax")
-        self.doubleSpinBox_MapVmax.setDecimals(2)
+        self.doubleSpinBox_MapVmax.setDecimals(6)
         self.doubleSpinBox_MapVmax.setMinimum(-1e12)
         self.doubleSpinBox_MapVmax.setMaximum(1e12)
         self.doubleSpinBox_MapVmax.setMinimumSize(QtCore.QSize(100, 28))
+        self.label_MapVmax.setVisible(False)
+        self.doubleSpinBox_MapVmax.setVisible(False)
         self.pushButton_MapScaleAuto = QtWidgets.QPushButton("Auto", self.groupBox_MapScale)
         self.pushButton_MapScaleAuto.setObjectName("pushButton_MapScaleAuto")
         self.label_MapPct = QtWidgets.QLabel("Low %", self.groupBox_MapScale)
@@ -1285,7 +1324,7 @@ class MainWindow(QtWidgets.QMainWindow, Ui_MainWindow):
         self.doubleSpinBox_MapPctLow.setObjectName("doubleSpinBox_MapPctLow")
         self.doubleSpinBox_MapPctLow.setDecimals(2)
         self.doubleSpinBox_MapPctLow.setRange(0.0, 100.0)
-        self.doubleSpinBox_MapPctLow.setValue(1.0)
+        self.doubleSpinBox_MapPctLow.setValue(0.0)
         self.doubleSpinBox_MapPctLow.setMinimumSize(QtCore.QSize(100, 28))
         self.label_MapPctHigh = QtWidgets.QLabel("High %", self.groupBox_MapScale)
         self.label_MapPctHigh.setObjectName("label_MapPctHigh")
@@ -1293,29 +1332,33 @@ class MainWindow(QtWidgets.QMainWindow, Ui_MainWindow):
         self.doubleSpinBox_MapPctHigh.setObjectName("doubleSpinBox_MapPctHigh")
         self.doubleSpinBox_MapPctHigh.setDecimals(2)
         self.doubleSpinBox_MapPctHigh.setRange(0.0, 100.0)
-        self.doubleSpinBox_MapPctHigh.setValue(99.0)
+        self.doubleSpinBox_MapPctHigh.setValue(100.0)
         self.doubleSpinBox_MapPctHigh.setMinimumSize(QtCore.QSize(100, 28))
         self.pushButton_MapScalePercentile = QtWidgets.QPushButton("Apply %", self.groupBox_MapScale)
         self.pushButton_MapScalePercentile.setObjectName("pushButton_MapScalePercentile")
         self.pushButton_MapScaleReset = QtWidgets.QPushButton("Reset", self.groupBox_MapScale)
         self.pushButton_MapScaleReset.setObjectName("pushButton_MapScaleReset")
+        self.pushButton_MapScalePercentile.setVisible(False)
+        self.pushButton_MapScaleAuto.setVisible(False)
+        self.pushButton_MapScaleReset.setVisible(False)
         self.pushButton_MapScalePercentile.setMinimumHeight(28)
         self.pushButton_MapScaleAuto.setMinimumHeight(28)
         self.pushButton_MapScaleReset.setMinimumHeight(28)
-        self.gridLayout_MapScale.addWidget(self.comboBox_MapCmap, 0, 0, 1, 2)
-        self.gridLayout_MapScale.addWidget(self.checkBox_MapReverseCmap, 1, 0, 1, 2)
+        self.map_hist_widget = MapHistogramWidget(self.groupBox_MapScale)
+        self.map_hist_widget.setMinimumHeight(125)
+        self.map_hist_widget.setMaximumHeight(155)
+        for spin in (self.doubleSpinBox_MapPctLow, self.doubleSpinBox_MapPctHigh):
+            spin.setMinimumWidth(110)
+            spin.setMaximumWidth(110)
+            spin.setSizePolicy(
+                QtWidgets.QSizePolicy.Fixed, QtWidgets.QSizePolicy.Fixed)
+        self.gridLayout_MapScale.addWidget(self.map_hist_widget, 0, 0, 1, 5)
+        self.gridLayout_MapScale.addWidget(self.comboBox_MapCmap, 1, 0, 1, 2)
         self.gridLayout_MapScale.addWidget(self.checkBox_MapLog, 2, 0, 1, 2)
-        self.gridLayout_MapScale.addWidget(self.label_MapVmin, 0, 2, 1, 1)
-        self.gridLayout_MapScale.addWidget(self.doubleSpinBox_MapVmin, 0, 3, 1, 1)
-        self.gridLayout_MapScale.addWidget(self.pushButton_MapScalePercentile, 0, 4, 1, 1)
-        self.gridLayout_MapScale.addWidget(self.label_MapVmax, 1, 2, 1, 1)
-        self.gridLayout_MapScale.addWidget(self.doubleSpinBox_MapVmax, 1, 3, 1, 1)
-        self.gridLayout_MapScale.addWidget(self.pushButton_MapScaleAuto, 1, 4, 1, 1)
-        self.gridLayout_MapScale.addWidget(self.label_MapPct, 2, 2, 1, 1)
-        self.gridLayout_MapScale.addWidget(self.doubleSpinBox_MapPctLow, 2, 3, 1, 1)
-        self.gridLayout_MapScale.addWidget(self.pushButton_MapScaleReset, 2, 4, 1, 1)
-        self.gridLayout_MapScale.addWidget(self.label_MapPctHigh, 3, 2, 1, 1)
-        self.gridLayout_MapScale.addWidget(self.doubleSpinBox_MapPctHigh, 3, 3, 1, 1)
+        self.gridLayout_MapScale.addWidget(self.label_MapPct, 1, 2, 1, 1)
+        self.gridLayout_MapScale.addWidget(self.doubleSpinBox_MapPctLow, 1, 3, 1, 1)
+        self.gridLayout_MapScale.addWidget(self.label_MapPctHigh, 2, 2, 1, 1)
+        self.gridLayout_MapScale.addWidget(self.doubleSpinBox_MapPctHigh, 2, 3, 1, 1)
         self.gridLayout_MapScale.setColumnStretch(0, 1)
         self.gridLayout_MapScale.setColumnStretch(1, 1)
         self.gridLayout_MapScale.setColumnStretch(2, 0)
