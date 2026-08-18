@@ -85,6 +85,6 @@ metadata is provided in `.zenodo.json`.
 
 Suggested citation before the DOI is minted:
 
-> Shim, S.-H. Dan (2026). RamPo: Raman spectroscopy analysis software for high-pressure experiments (Version 0.7.2a0) [Computer software]. Zenodo.
+> Shim, S.-H. Dan (2026). RamPo: Raman spectroscopy analysis software for high-pressure experiments (Version 0.7.3) [Computer software]. Zenodo.
 
 After Zenodo creates the DOI, add the DOI URL to this citation.
