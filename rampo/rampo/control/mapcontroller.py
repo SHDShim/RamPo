@@ -242,16 +242,37 @@ class MapController(object):
         name_lower = name.lower()
         map_match = re.search(r"map_(\d+)", name_lower)
         if map_match:
+            position = self._map_position_number(name_lower, map_match)
             return (
                 0,
                 name_lower[:map_match.start()],
                 int(map_match.group(1)),
-                name_lower[map_match.end():],
+                position if position is not None else -1,
+                name_lower,
             )
         tail_match = re.search(r"(\d+)$", name_lower)
         if tail_match:
             return (1, name_lower[:tail_match.start()], int(tail_match.group(1)))
         return (2, name_lower)
+
+    @staticmethod
+    def _map_position_number(name, map_match=None):
+        """Return the scan position encoded after ``map_<number>``.
+
+        Map filenames commonly contain both a map/pressure number and a
+        pixel number, for example ``..._map_5_GPa_001.spe``.  The number
+        immediately after ``map_`` is not the pixel index in that format;
+        the final numeric token is.
+        """
+        if map_match is None:
+            map_match = re.search(r"map_(\d+)", name)
+        if map_match is None:
+            return None
+
+        suffix_numbers = re.findall(r"\d+", name[map_match.end():])
+        if suffix_numbers:
+            return int(suffix_numbers[-1])
+        return int(map_match.group(1))
 
     def _derive_position_indices(self, files):
         nums = []
@@ -262,8 +283,14 @@ class MapController(object):
             if m is None:
                 ok = False
                 break
-            nums.append(int(m.group(1)))
-        if not ok:
+            position = self._map_position_number(b, m)
+            if position is None:
+                ok = False
+                break
+            nums.append(position)
+        # Duplicate parsed positions are ambiguous.  Preserve the selected
+        # file order rather than allowing all values to overwrite one pixel.
+        if (not ok) or (len(set(nums)) != len(nums)):
             return list(range(len(files)))
         min_num = min(nums)
         return [n - min_num for n in nums]
