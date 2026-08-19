@@ -53,9 +53,10 @@ rampo = "rampo.__main__:main"
 
 [tool.setuptools]
 include-package-data = true
+py-modules = ["version"]
 
 [tool.setuptools.dynamic]
-version = {attr = "rampo.rampo.version.__version__"}
+version = {attr = "version.__version__"}
 
 [tool.setuptools.packages.find]
 include = ["rampo*"]

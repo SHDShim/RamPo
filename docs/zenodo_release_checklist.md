@@ -5,7 +5,7 @@ GitHub-Zenodo integration.
 
 ## Before Creating the GitHub Release
 
-1. Confirm that `rampo/rampo/version.py`, `CITATION.cff`, and the GitHub
+1. Confirm that `version.py`, `CITATION.cff`, and the GitHub
    release tag all use the same PEP 440 version string.
 2. Confirm that `README.md` describes the current user-facing behavior.
 3. Confirm that `LICENSE` and `pyproject.toml` both identify the license as

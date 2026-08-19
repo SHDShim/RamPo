@@ -4,7 +4,7 @@ from .qtd import Ui_MainWindow
 from .ccdhistwidget import CCDHistogramWidget
 from .maphistwidget import MapHistogramWidget
 from ..utils import SpinBoxFixStyle
-from ..version import __version__
+from .._version import __version__
 from ..citation import __citation__
 from ..utils import InformationBox
 # exec(open(os.path.join(os.path.curdir, 'version.py')).read())
