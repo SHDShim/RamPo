@@ -42,6 +42,9 @@ dependencies = [
 cif = [
   "pymatgen",
 ]
+executable = [
+  "pyinstaller>=6.22,<7",
+]
 
 [project.urls]
 Homepage = "https://github.com/SHDShim/RamPo"

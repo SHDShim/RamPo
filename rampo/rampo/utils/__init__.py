@@ -5,7 +5,9 @@ from .fileutils import samefilename, extract_filename, make_filename, \
     get_unique_filename, backup_copy, read_any_poni_file, \
     has_raw_spe_files, build_spectrum_name_filter, \
     open_spectrum_file_dialog, get_spectrum_filelist, \
+    get_valid_start_directory, \
         make_poni2_from_poni21, make_converted_poni2_filename
+from .settingsutils import get_rampo_settings
 from .dialogs import dialog_savefile, ErrorMessageBox, InformationBox
 from .excelutils import xls_jlist
 from .physutils import convert_wl_to_energy

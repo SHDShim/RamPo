@@ -28,6 +28,7 @@ from .sequencecontroller import SequenceController
 from ..utils import dialog_savefile, writechi, extract_extension, \
     convert_wl_to_energy, get_sorted_filelist, find_from_filelist, \
     make_filename, get_directory, get_temp_dir, get_spectrum_filelist
+from ..utils import get_rampo_settings, get_valid_start_directory
 from ..ds_ramspec import get_data_section
 #from utils import readchi, make_filename, writechi
 
@@ -900,8 +901,7 @@ class MainController(object):
         """
         Write default setting
         """
-        # self.settings = QtCore.QSettings('DS', 'PeakPo')
-        self.settings = QtCore.QSettings('DS', 'PeakPo')
+        self.settings = get_rampo_settings()
         # print('write:' + self.model.chi_path)
         self.settings.setValue('chi_path', self.model.chi_path)
         self.settings.setValue('jcpds_path', self.model.jcpds_path)
@@ -961,11 +961,16 @@ class MainController(object):
         """
         Read default setting
         """
-        self.settings = QtCore.QSettings('DS', 'PeakPo')
+        self.settings = get_rampo_settings()
         # self.settings.setFallbacksEnabled(False)
-        saved_chi_path = self.settings.value('chi_path', os.getcwd())
+        saved_chi_path = get_valid_start_directory(
+            self.settings.value('chi_path'))
         self.model.set_chi_path(saved_chi_path)
         self.model.set_jcpds_path(self.settings.value('jcpds_path'))
+        # Replace a restored stale value immediately so the next chooser never
+        # receives it, even if the application exits abruptly.
+        self.settings.setValue('chi_path', self.model.chi_path)
+        self.settings.sync()
         pnt_fs = str(self.settings.value(
             'fontsize_pt_label', self.widget.comboBox_PnTFontSize.currentText()))
         hkl_fs = str(self.settings.value(

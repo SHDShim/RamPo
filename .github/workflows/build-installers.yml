@@ -1,0 +1,124 @@
+name: Build desktop installers
+
+on:
+  workflow_dispatch:
+  push:
+    tags:
+      - "v*"
+
+permissions:
+  contents: read
+
+jobs:
+  macos:
+    name: macOS (${{ matrix.architecture }})
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - runner: macos-15
+            architecture: arm64
+          - runner: macos-15-intel
+            architecture: x86_64
+    runs-on: ${{ matrix.runner }}
+    env:
+      QT_API: pyqt6
+      MACOS_CERTIFICATE: ${{ secrets.MACOS_CERTIFICATE }}
+      MACOS_CERTIFICATE_PASSWORD: ${{ secrets.MACOS_CERTIFICATE_PASSWORD }}
+      MACOS_SIGNING_IDENTITY: ${{ secrets.MACOS_SIGNING_IDENTITY }}
+      KEYCHAIN_PASSWORD: ${{ secrets.KEYCHAIN_PASSWORD }}
+      APPLE_ID: ${{ secrets.APPLE_ID }}
+      APPLE_APP_PASSWORD: ${{ secrets.APPLE_APP_PASSWORD }}
+      APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-python@v7
+        with:
+          python-version: "3.11"
+          cache: pip
+
+      - name: Install build dependencies
+        run: |
+          python -m pip install --upgrade pip
+          python -m pip install ".[executable]"
+
+      - name: Import Apple signing certificate
+        if: env.MACOS_CERTIFICATE != '' && env.MACOS_SIGNING_IDENTITY != ''
+        run: |
+          python -c 'import base64, os, pathlib; pathlib.Path(os.environ["RUNNER_TEMP"]).joinpath("rampo-signing.p12").write_bytes(base64.b64decode(os.environ["MACOS_CERTIFICATE"]))'
+          security create-keychain -p "$KEYCHAIN_PASSWORD" "$RUNNER_TEMP/rampo-build.keychain-db"
+          security set-keychain-settings -lut 21600 "$RUNNER_TEMP/rampo-build.keychain-db"
+          security unlock-keychain -p "$KEYCHAIN_PASSWORD" "$RUNNER_TEMP/rampo-build.keychain-db"
+          security import "$RUNNER_TEMP/rampo-signing.p12" \
+            -k "$RUNNER_TEMP/rampo-build.keychain-db" \
+            -P "$MACOS_CERTIFICATE_PASSWORD" \
+            -T /usr/bin/codesign
+          security set-key-partition-list \
+            -S apple-tool:,apple: \
+            -s \
+            -k "$KEYCHAIN_PASSWORD" \
+            "$RUNNER_TEMP/rampo-build.keychain-db"
+          security list-keychain -d user -s "$RUNNER_TEMP/rampo-build.keychain-db"
+
+      - name: Build app and disk image
+        run: bash packaging/build_macos.sh
+
+      - name: Upload macOS artifacts
+        uses: actions/upload-artifact@v7
+        with:
+          name: RamPo-macOS-${{ matrix.architecture }}
+          path: artifacts/*
+          if-no-files-found: error
+          retention-days: 30
+
+      - name: Remove temporary signing keychain
+        if: always() && env.MACOS_CERTIFICATE != ''
+        run: |
+          security delete-keychain "$RUNNER_TEMP/rampo-build.keychain-db" || true
+          rm -f "$RUNNER_TEMP/rampo-signing.p12"
+
+  windows:
+    name: Windows (x64)
+    runs-on: windows-2025
+    env:
+      QT_API: pyqt6
+      WINDOWS_CERTIFICATE: ${{ secrets.WINDOWS_CERTIFICATE }}
+      WINDOWS_CERTIFICATE_PASSWORD: ${{ secrets.WINDOWS_CERTIFICATE_PASSWORD }}
+      WINDOWS_TIMESTAMP_URL: ${{ secrets.WINDOWS_TIMESTAMP_URL }}
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-python@v7
+        with:
+          python-version: "3.11"
+          cache: pip
+
+      - name: Install build dependencies
+        shell: pwsh
+        run: |
+          python -m pip install --upgrade pip
+          python -m pip install ".[executable]"
+          choco install innosetup --no-progress -y
+
+      - name: Prepare Windows signing certificate
+        if: env.WINDOWS_CERTIFICATE != ''
+        shell: pwsh
+        run: |
+          $certificatePath = Join-Path $env:RUNNER_TEMP "rampo-signing.pfx"
+          [IO.File]::WriteAllBytes(
+            $certificatePath,
+            [Convert]::FromBase64String($env:WINDOWS_CERTIFICATE)
+          )
+          "WINDOWS_CERTIFICATE_PATH=$certificatePath" | Out-File `
+            -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
+
+      - name: Build executable and installer
+        shell: pwsh
+        run: ./packaging/build_windows.ps1
+
+      - name: Upload Windows artifacts
+        uses: actions/upload-artifact@v7
+        with:
+          name: RamPo-Windows-x64
+          path: artifacts/*
+          if-no-files-found: error
+          retention-days: 30

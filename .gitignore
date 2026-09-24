@@ -1,9 +1,6 @@
 # Skills (local agent workflows)
 skills/
 
-# GitHub workflows and configs
-.github/
-
 # Byte-compiled / optimized / DLL files
 __pycache__/
 *.py[cod]
@@ -15,6 +12,7 @@ __pycache__/
 # Distribution / packaging
 build/
 dist/
+artifacts/
 *.egg-info/
 
 # Environments

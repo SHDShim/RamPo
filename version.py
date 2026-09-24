@@ -1,8 +1,9 @@
 """RamPo version."""
 
-__version__ = "0.7.5"
+__version__ = "0.7.6"
 
 """_summary_
+0.7.6 Fix file chooser hangs caused by stale saved directories
 0.7.5 Update colormap handling for Matplotlib 3.10 and later
 0.7.4 name convention issue solved
 0.7.3 Unify CCD and Map histogram controls; add log scale for CCD;

@@ -85,6 +85,9 @@ The preferred shell is `zsh`.
 Use shell commands that are reproducible and explicit about the `dev26a`
 environment when Python behavior depends on installed packages.
 
-## External Dependencies
+## Legacy JCPDS Code
 
-A symbolic link to the `PeakPo` repository is provided at `/Users/danshim/Git-Workspace/science-python/RamPo/PeakPo`. Agents should use this link to read or modify code in the `PeakPo` repository as needed.
+The JCPDS-related code in this repository is inherited legacy code and is not
+part of the active RamPo workflow. Do not modify, refactor, test, or otherwise
+incorporate JCPDS-related code into new work unless the user explicitly
+requests it.

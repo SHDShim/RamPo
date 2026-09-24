@@ -7,6 +7,36 @@ import shutil
 import collections
 from qtpy import QtWidgets, QtCore
 
+
+def get_valid_start_directory(path=None, fallback=None):
+    """Return an existing directory suitable for a file dialog.
+
+    Saved paths can outlive removable drives, renamed folders, or a move
+    between operating systems. Passing such a stale path directly to Qt can
+    make QFileDialog spend a long time trying to resolve it.
+    """
+    candidates = []
+    if path not in (None, ""):
+        candidates.append(path)
+    if fallback not in (None, ""):
+        candidates.append(fallback)
+
+    documents = QtCore.QStandardPaths.writableLocation(
+        QtCore.QStandardPaths.StandardLocation.DocumentsLocation)
+    candidates.extend((documents, os.path.expanduser("~"), os.getcwd()))
+
+    for candidate in candidates:
+        try:
+            candidate = os.path.abspath(os.path.expanduser(str(candidate)))
+            if os.path.isfile(candidate):
+                candidate = os.path.dirname(candidate)
+            if os.path.isdir(candidate):
+                return candidate
+        except (OSError, TypeError, ValueError):
+            continue
+    return ""
+
+
 def get_unique_filename(filename):
     """Generate a unique filename by appending a number 
     if the file already exists."""
@@ -182,6 +212,7 @@ def open_spectrum_file_dialog(
         label="Spectra",
         multi=False,
         hide_rampo_dirs=True):
+    start_dir = get_valid_start_directory(start_dir)
     dialog = QtWidgets.QFileDialog(parent, title, start_dir or "")
     dialog.setOption(QtWidgets.QFileDialog.DontUseNativeDialog, True)
     dialog.setFileMode(

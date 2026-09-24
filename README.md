@@ -41,6 +41,14 @@ pip install rampo
 rampo
 ```
 
+## Standalone applications
+
+Native macOS and Windows applications can be generated with PyInstaller. The
+repository workflow produces Apple Silicon and Intel macOS disk images, plus a
+Windows x64 installer and portable archive. See
+[`packaging/README.md`](packaging/README.md) for local builds, GitHub Actions,
+code signing, and notarization.
+
 ## Typical Workflow
 
 1. Open an `.spe` file by clicking `Open SPE` button.
