@@ -43,9 +43,15 @@ rampo
 
 ## Standalone applications
 
-Native macOS and Windows applications can be generated with PyInstaller. The
-repository workflow produces Apple Silicon and Intel macOS disk images, plus a
-Windows x64 installer and portable archive. See
+Native macOS and Windows applications are generated on GitHub Actions. After
+committing and pushing a build-ready revision, run:
+
+```zsh
+bash packaging/build_github.sh
+```
+
+The workflow produces Apple Silicon and Intel macOS disk images, plus a
+Windows x64 installer and portable archive, then downloads them locally. See
 [`packaging/README.md`](packaging/README.md) for local builds, GitHub Actions,
 code signing, and notarization.
 

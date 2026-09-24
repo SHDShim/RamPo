@@ -14,21 +14,45 @@ macOS applications.
 
 The version is read from the repository's root `version.py` file.
 
-## GitHub Actions
+## Recommended: build with GitHub Actions
 
 The `Build desktop installers` workflow runs manually or whenever a `v*` tag
 is pushed. It builds on native GitHub-hosted runners and retains the artifacts
 for 30 days.
 
-1. Open **Actions** in GitHub.
-2. Select **Build desktop installers**.
-3. Select **Run workflow**.
-4. Download the three artifact groups after all jobs pass.
+Install and authenticate GitHub CLI once:
+
+```zsh
+gh auth login -h github.com
+```
+
+Commit and push the exact revision to build, then run:
+
+```zsh
+bash packaging/build_github.sh
+```
+
+The script refuses to build a dirty or unpushed worktree. It dispatches the
+workflow for the current branch, waits for every native job, and downloads the
+three artifact groups under `artifacts/github-run-<run-id>/`.
+
+To build a specific pushed branch or tag, or select the download directory:
+
+```zsh
+bash packaging/build_github.sh v0.7.6
+bash packaging/build_github.sh main artifacts/latest-installers
+```
+
+The same workflow can be run in the GitHub website under **Actions → Build
+desktop installers → Run workflow**.
 
 Unsigned Windows builds and ad-hoc-signed macOS builds are suitable for
 testing. Public distribution should use the signing secrets described below.
 
-## Local macOS build
+## Optional local macOS build
+
+Use local builds only for platform-specific development or packaging
+troubleshooting. GitHub Actions is the standard distribution build path.
 
 Install the executable-build dependencies into `dev26a`:
 
@@ -46,7 +70,7 @@ Without a Developer ID identity, PyInstaller applies an ad-hoc signature. This
 is sufficient for local testing but not for normal public distribution through
 Gatekeeper.
 
-## Local Windows build
+## Optional local Windows build
 
 Install Inno Setup 6 or later, then install the Python build dependencies into
 the Windows `dev26a` environment:

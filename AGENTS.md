@@ -91,3 +91,11 @@ The JCPDS-related code in this repository is inherited legacy code and is not
 part of the active RamPo workflow. Do not modify, refactor, test, or otherwise
 incorporate JCPDS-related code into new work unless the user explicitly
 requests it.
+
+## Desktop Packaging
+
+Use GitHub Actions as the standard path for macOS and Windows application
+bundles and installers. After the intended revision is committed and pushed,
+run `bash packaging/build_github.sh` to dispatch the native builds, wait for
+completion, and download their artifacts. Use local PyInstaller builds only
+for platform-specific development or packaging troubleshooting.
