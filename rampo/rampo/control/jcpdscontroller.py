@@ -4,8 +4,9 @@ import numpy as np
 from qtpy import QtWidgets
 from qtpy import QtCore
 from qtpy import QtGui
+from matplotlib import colormaps
 from matplotlib import colors as mcolors
-import matplotlib.cm as cmx
+from matplotlib.cm import ScalarMappable
 from .mplcontroller import MplController
 from .jcpdstablecontroller import JcpdsTableController
 from ..utils import xls_jlist, dialog_savefile, make_filename, get_temp_dir, \
@@ -191,10 +192,10 @@ class JcpdsController(object):
             cif_k0, cif_k0p, cif_alpha = cif_params
 
         n_color = 20
-        jet = cmx.get_cmap('gist_rainbow')
+        jet = colormaps.get_cmap('gist_rainbow')
         cNorm = mcolors.Normalize(vmin=0, vmax=n_color)
         c_index = range(n_color)
-        scalarMap = cmx.ScalarMappable(norm=cNorm, cmap=jet)
+        scalarMap = ScalarMappable(norm=cNorm, cmap=jet)
         
         # Generate full color palette
         color_palette = [
